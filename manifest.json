@@ -1,0 +1,15 @@
+{
+  "name": "II/176 Vacíkov–Zliv",
+  "short_name": "Vacíkov–Zliv",
+  "description": "Mobilní mapa stavby II/176 Vacíkov-Volenice-Zliv (staničení, výkresy, foto, deník).",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#16213e",
+  "theme_color": "#16213e",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
