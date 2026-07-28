@@ -19,6 +19,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <!-- Plugin pro otáčení mapy dvěma prsty (touch rotate jako v Google Maps) -->
 <script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
@@ -1261,6 +1262,35 @@ try {
 // Messaging inicializujeme až po service worker registraci (níže v skriptu)
 var fbMessaging = null;
 
+// ── Firebase Storage: SOUKROMÉ soubory (fotky/PDF), jen pro přihlášené (EU bucket) ──
+// DB má veřejné čtení, proto do DB ukládáme jen CESTY (photos/…, pdf/…), NE token-URL.
+// Zobrazení překládá cestu na dočasnou token-URL přes getDownloadURL (vyžaduje přihlášení).
+var fbStorage = null;
+try { fbStorage = firebase.storage(); } catch(e){ console.warn('Storage init selhal:', e); }
+var _fileUrlCache = {};
+function resolveFileUrl(path){
+  if(!path) return Promise.resolve('');
+  if(/^(data:|blob:|https?:)/.test(path)) return Promise.resolve(path);   // lokální náhled / legacy URL
+  if(_fileUrlCache[path]) return Promise.resolve(_fileUrlCache[path]);
+  if(!fbStorage) return Promise.resolve('');
+  return fbStorage.ref(path).getDownloadURL()
+    .then(function(u){ _fileUrlCache[path]=u; return u; })
+    .catch(function(e){ console.warn('resolveFileUrl selhal pro', path, e && e.code); return ''; });
+}
+function setResolvedSrc(el, path, attr){
+  attr = attr || 'src';
+  if(!el) return;
+  resolveFileUrl(path).then(function(u){ if(u) el[attr]=u; });
+}
+// Nastaví <iframe> na PDF ze Storage (přeloží cestu → token-URL → pdfFrameSrcFor).
+function setPdfFrame(frameEl, path){
+  if(!frameEl) return;
+  if(!path){ frameEl.src='about:blank'; return; }
+  resolveFileUrl(path).then(function(u){
+    frameEl.src = u ? pdfFrameSrcFor(u) : 'about:blank';
+  });
+}
+
 var KM_START = 3.400;   /* ZÚ — konec nového povrchu za Vacíkovem */
 var KM_END   = 8.450;   /* KÚ — odbočka na samotu Zliv */
 
@@ -1410,7 +1440,9 @@ var CALIB_POINTS = [
 // findDocsForKm vrátí všechny pasující {kmOd ≤ km < kmDo} → záložky v PDF panelu.
 // DOPLNIT každé pole dle reference/datova-pole.md §4. Formát:
 //   {kmOd:0.000, kmDo:0.400, soubor:PDF_BASE+'SO_101/...pdf', nazev:'Situace SO 101 č.1 (km 0,000–0,400)'}
-var DOCS_SITUACE = [ /* DOPLNIT: situace */ ];
+var DOCS_SITUACE = [
+  {kmOd:3.400, kmDo:8.450, soubor:'pdf/PD-technicka-specifikace.pdf', nazev:'Technická specifikace / projektová dokumentace (km 3,400–8,450)'}
+];
 var DOCS_PP      = [ /* DOPLNIT: podélné profily */ ];
 var DOCS_VPR     = [ /* DOPLNIT: vzorové příčné řezy */ ];
 var DOCS_DZ      = [ /* DOPLNIT: dopravní značení */ ];
@@ -1684,7 +1716,7 @@ function openPRPanel(realKm, pr) {
   if(openWrap) openWrap.style.display='none';
   if(frameWrap) frameWrap.style.display='flex';
   var frame = document.getElementById('pdf-frame');
-  if(frame) frame.src = pdfFrameSrcFor(pr.soubor);
+  if(frame) setPdfFrame(frame, pr.soubor);
 }
 
 // Azimut úseku mezi dvěma body (stupně, 0=N, 90=E)
@@ -1902,10 +1934,12 @@ function isPWA() {
 
 function openPdfExternal() {
   if(!currentPdfSrc) return;
-  // Vždy otevřít externě v Safari - tam dostane plný PDF prohlížeč
-  // s toolbarem, pinch-zoom a navigací mezi stranami.
-  // (V PWA módu na iOS jiný způsob neexistuje, iframe je vykreslen bez toolbarů.)
-  window.open(currentPdfSrc, '_blank');
+  // Otevři prázdné okno HNED (v gestu, jinak popup-blocker), po přeložení nastav location.
+  var w = window.open('', '_blank');
+  resolveFileUrl(currentPdfSrc).then(function(u){
+    if(!u){ if(w) w.close(); showToast('❌ Nelze načíst PDF', 2500); return; }
+    if(w) w.location.href = u; else window.open(u, '_blank');
+  });
 }
 
 function renderDocPage(realKm) {
@@ -1949,7 +1983,7 @@ function renderDocPage(realKm) {
   if(openWrap)   openWrap.style.display   = 'none';
   if(frameWrap)  frameWrap.style.display  = 'flex';
   var frame = document.getElementById('pdf-frame');
-  if(frame) frame.src = pdfFrameSrcFor(p.soubor);
+  if(frame) setPdfFrame(frame, p.soubor);
   if(zoomIn)  zoomIn.style.display  = 'none';
   if(zoomOut) zoomOut.style.display = 'none';
 }
@@ -2798,28 +2832,16 @@ function burnInMetadata(dataUrl, km, author, callback) {
 }
 
 function uploadPhotoToGitHub(dataUrl, filename, callback) {
-  var base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '');
+  // Nahrává na Firebase Storage (soukromé, EU, jen pro přihlášené). Vrací CESTU (ne URL),
+  // aby se do DB (veřejné čtení) neukládaly token-odkazy. Zobrazení překládá resolveFileUrl().
   var user = (typeof fbAuth !== 'undefined' && fbAuth) ? fbAuth.currentUser : null;
   if(!user) { showToast('❌ Nejsi přihlášen – foto se nenahrálo', 3000); callback(null); return; }
-  user.getIdToken().then(function(idToken){
-    return fetch(UPLOAD_FN_URL, {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + idToken, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filename: filename, content: base64 })
-    });
-  })
-  .then(function(r){ return r.json().then(function(d){ return { ok: r.ok, data: d }; }); })
-  .then(function(res){
-    if(res.ok && res.data && res.data.download_url) {
-      callback(res.data.download_url);
-    } else {
-      console.error('Upload fn err:', JSON.stringify(res.data));
-      var msg = (res.data && res.data.error) ? res.data.error : 'neznámá chyba';
-      showToast('❌ Upload: ' + msg, 4000);
-      callback(null);
-    }
-  })
-  .catch(function(e){ console.error('Upload fn exc:', e); showToast('❌ Síťová chyba uploadu', 3000); callback(null); });
+  if(!fbStorage) { showToast('❌ Storage není dostupný', 3000); callback(null); return; }
+  var base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '');
+  var path = 'photos/' + filename;
+  fbStorage.ref(path).putString(base64, 'base64', { contentType: 'image/jpeg' })
+    .then(function(){ callback(path); })
+    .catch(function(e){ console.error('Storage upload err:', e); showToast('❌ Upload fotky selhal: ' + (e && e.code ? e.code : ''), 4000); callback(null); });
 }
 
 function uploadPhotosToGitHub(items, onProgress, onDone, meta) {
@@ -2956,13 +2978,12 @@ function openNoteDetail(id) {
     var div = document.createElement('div');
     div.className = 'detail-photo';
         var img = document.createElement('img');
-    img.src = src;
+    setResolvedSrc(img, src);
     img.style.cssText = 'cursor:zoom-in;width:120px;height:90px;object-fit:cover;border-radius:8px;';
-    img.onclick = function(){ openPhotoFs(this.src); };
+    (function(sp){ img.onclick = function(){ openPhotoFs(sp); }; })(src);
     var dlBtn = document.createElement('a');
-    dlBtn.href = src;
-    if(!src.startsWith('data:')){ dlBtn.target='_blank'; dlBtn.rel='noopener'; }
-    else { dlBtn.download = 'foto_' + (pi+1) + '.jpg'; }
+    if(!src.startsWith('data:')){ dlBtn.target='_blank'; dlBtn.rel='noopener'; setResolvedSrc(dlBtn, src, 'href'); }
+    else { dlBtn.href = src; dlBtn.download = 'foto_' + (pi+1) + '.jpg'; }
     dlBtn.style.cssText = 'position:absolute;bottom:2px;left:2px;background:rgba(0,0,0,0.6);color:#fff;font-size:14px;border-radius:4px;padding:1px 4px;text-decoration:none;line-height:1.4;';
     dlBtn.textContent = '⬇';
     var btn = document.createElement('button');
@@ -2984,9 +3005,12 @@ function openNoteDetail(id) {
       dlAll.style.display = 'block';
       dlAll.onclick = function() {
         photos.forEach(function(src, i) {
-          var a = document.createElement('a');
-          a.href = src; a.download = 'foto_' + (i+1) + '.jpg';
-          document.body.appendChild(a); a.click(); document.body.removeChild(a);
+          resolveFileUrl(src).then(function(u){
+            if(!u) return;
+            var a = document.createElement('a');
+            a.href = u; a.download = 'foto_' + (i+1) + '.jpg'; a.target='_blank';
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+          });
         });
       };
     } else {
@@ -3021,9 +3045,9 @@ var _photoFsItem = null;  // celá meta fotky (kvůli datu pořízení při stah
 
 function openPhotoFs(src, firebaseKey, item) {
   var url = (typeof src === 'string') ? src : src.src;
-  document.getElementById('photo-fs-img').src = url;
+  setResolvedSrc(document.getElementById('photo-fs-img'), url);
   var ob = document.getElementById('photo-fs-open');
-  if(ob) ob.href = url;
+  if(ob) setResolvedSrc(ob, url, 'href');
   _photoFsKey = firebaseKey || null;
   _photoFsItem = item || (typeof src === 'object' ? src : { url: url });
   if(!_photoFsItem.url) _photoFsItem.url = url;
@@ -3081,7 +3105,7 @@ function exifDateString(d) {
 
 // Stáhne blob a vrátí Promise<{blob, dataUrl}>
 function fetchPhotoAsBlob(url) {
-  return fetch(url, { mode:'cors' }).then(function(r){
+  return resolveFileUrl(url).then(function(u){ return fetch(u, { mode:'cors' }); }).then(function(r){
     if(!r.ok) throw new Error('HTTP '+r.status);
     return r.blob();
   });
@@ -4160,7 +4184,7 @@ function renderPropPage(idx) {
   var propZoomOut = document.getElementById('btn-prop-zoom-out');
   if(canvasWrap) canvasWrap.style.display = 'none';
   if(openWrap)   openWrap.style.display   = 'none';
-  if(frameEl)    { frameEl.style.display = 'flex'; frameEl.src = pdfFrameSrcFor(p.soubor); }
+  if(frameEl)    { frameEl.style.display = 'flex'; setPdfFrame(frameEl, p.soubor); }
   if(propZoomIn)  propZoomIn.style.display  = 'none';
   if(propZoomOut) propZoomOut.style.display = 'none';
 }
@@ -4304,9 +4328,9 @@ function loadPropNotes(propId) {
         photoRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;';
         n.photos.forEach(function(src, pi) {
           var img = document.createElement('img');
-          img.src = src;
+          setResolvedSrc(img, src);
           img.style.cssText = 'width:60px;height:60px;object-fit:cover;border-radius:4px;cursor:pointer;';
-          img.onclick = function(){ window.open(src,'_blank'); };
+          (function(sp){ img.onclick = function(){ resolveFileUrl(sp).then(function(u){ if(u) window.open(u,'_blank'); }); }; })(src);
           photoRow.appendChild(img);
         });
         div.appendChild(photoRow);
@@ -4392,7 +4416,7 @@ function openPropEdit(propId, key, note) {
     var wrap = document.createElement('div');
     wrap.style.cssText = 'position:relative;display:inline-block;';
     var img = document.createElement('img');
-    img.src = src;
+    setResolvedSrc(img, src);
     img.style.cssText = 'width:54px;height:54px;object-fit:cover;border-radius:4px;';
     var del = document.createElement('button');
     del.textContent = '✕';
@@ -4866,7 +4890,7 @@ function _galleryItemEl(item) {
   div.setAttribute('data-gk', k);
   if(gallerySelectedKeys[k]) div.classList.add('selected');
   var img = document.createElement('img');
-  img.src = item.url; img.loading = 'lazy';
+  setResolvedSrc(img, item.url); img.loading = 'lazy';
   (function(it, divRef) {
     img.onclick = function() {
       if(gallerySelectMode) { _toggleGallerySelection(it, divRef); }
@@ -5589,14 +5613,18 @@ function renderTnmPhotos() {
   var box = document.getElementById('tnm-photos-preview');
   if(!box) return;
   box.innerHTML = window.taskFormPhotos.map(function(p, idx){
-    var src = p.url || p.dataUrl;
+    var src = p.dataUrl || '';
     var pendBadge = p.pending ? '<div class="pending">⏳ nová</div>' : '';
     return '<div class="tnm-photo-thumb">'
-      + '<img src="' + src + '" alt="">'
+      + '<img src="' + src + '" data-path="' + encodeURIComponent(p.url || '') + '" alt="">'
       + '<div class="x" onclick="removeTnmPhoto(' + idx + ')">✕</div>'
       + pendBadge
       + '</div>';
   }).join('');
+  Array.prototype.forEach.call(box.querySelectorAll('img[data-path]'), function(im){
+    var p = decodeURIComponent(im.getAttribute('data-path'));
+    if(p && !im.getAttribute('src')) setResolvedSrc(im, p);
+  });
 }
 
 function removeTnmPhoto(idx) {
@@ -5765,8 +5793,13 @@ function renderTaskDetail(t) {
     if(t.photos && t.photos.length > 0) {
       photosBox.style.display = 'flex';
       photosBox.innerHTML = t.photos.map(function(url){
-        return '<img src="' + url + '" loading="lazy" onclick="openPhotoFs(\'' + url + '\')">';
+        return '<img data-path="' + encodeURIComponent(url) + '" loading="lazy">';
       }).join('');
+      Array.prototype.forEach.call(photosBox.querySelectorAll('img[data-path]'), function(im){
+        var p = decodeURIComponent(im.getAttribute('data-path'));
+        setResolvedSrc(im, p);
+        im.onclick = function(){ openPhotoFs(p); };
+      });
     } else {
       photosBox.style.display = 'none';
       photosBox.innerHTML = '';
