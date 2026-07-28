@@ -43,12 +43,17 @@ Jednosouborová webová aplikace (velín) pro stavbu **II/176 Vacíkov-Nová Luk
 - **Uložit / obnovit pohled** mapy (💾 Uložit / 📍 Můj / ⌂ Výchozí ve Vrstvách).
 - **Vrstvy vyčištěné** – odebrány template objekty, které stavba nemá; pod‑vrstvy poznámek/úkolů se zobrazí až po zapnutí hlavního přepínače; sekce mají práva (`data-perm`).
 
-## Backlog (další dávka)
-- Nahrávání PDF/výkresů z aplikace (přes Storage) – umožní doplnit i přílohu **PAU** bez servisního klíče.
-- Měření vzdálenosti/plochy + evidence.
-- Úkoly: převzetí / předání / dokončení s historií.
-- Hromadné mazání fotek z galerie.
-- Fotky v mapě (fotomapa) jako vrstva.
-- Statistika nejpoužívanějších funkcí.
-- Plynulé focení – upload na pozadí.
+- **Nahrávání PDF/výkresů z aplikace** (➕ v panelu výkresů) – přihlášený nahraje PDF přímo na Storage, bez klíče.
+- **Měření na mapě** (📏 FAB) – vzdálenost / obvod / plocha / bod, s uložením pro tým a **evidencí** (📐), práva autor/admin.
+- **Úkoly workflow** – stav open → 🙋 řeší se (převzetí) → ✅ hotovo (s výsledkem); 🔄 předání jinému; timeline „📋 Průběh".
+- **Hromadné mazání fotek** z galerie (jen vlastní; maže i soubory ze Storage – GDPR).
+- **Fotky v mapě (fotomapa)** – vrstva s piny, vlastní právo.
+- **Statistika stavby** (📊 v admin panelu) – počty fotek/poznámek/úkolů/měření/výkresů + nejaktivnější lidé.
+- **PD i příloha PAU** nahrané na Storage a navázané na staničení (2 dokumenty).
+
+## Backlog (zbývá)
+- Plynulé focení – upload na pozadí (fronta).
+- Verzování/zneplatňování výkresů.
+- Denní záloha DB (Cloud Function).
+- Editace bodů měření tažením na mapě.
 - (Odloženo dle zadání: dron, 360°, push notifikace.)
