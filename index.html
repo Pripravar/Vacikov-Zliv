@@ -795,6 +795,36 @@ textarea.note-field { min-height:80px; resize:vertical; }
 #btn-tasks { position:relative; background:var(--panel2); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:6px 10px; font-size:15px; cursor:pointer; }
 #btn-tasks .task-badge { position:absolute; top:-5px; right:-5px; background:var(--accent); color:#fff; font-size:10px; font-weight:700; border-radius:9px; padding:1px 5px; min-width:16px; text-align:center; display:none; }
 #btn-tasks .task-badge.show { display:block; }
+#btn-rozhlas .task-badge { position:absolute; top:-5px; right:-5px; background:#e53e3e; color:#fff; font-size:10px; font-weight:700; border-radius:9px; padding:1px 5px; min-width:16px; text-align:center; display:none; }
+#btn-rozhlas .task-badge.show { display:block; }
+
+/* ── Rozhlas + Nápověda modaly ── */
+#rozhlas-modal, #help-modal { display:none; position:fixed; inset:0; z-index:5000; background:rgba(0,0,0,.55); align-items:flex-start; justify-content:center; padding:24px 12px; overflow-y:auto; }
+#rozhlas-modal.show, #help-modal.show { display:flex; }
+.rz-card, .hlp-card { background:var(--panel); border:1px solid var(--border); border-radius:14px; width:100%; max-width:560px; padding:18px; box-shadow:0 12px 40px rgba(0,0,0,.5); }
+.rz-top, .hlp-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+.rz-top h3, .hlp-top h3 { margin:0; font-size:18px; }
+.rz-x, .hlp-x { background:none; border:none; color:var(--text2); font-size:22px; cursor:pointer; line-height:1; }
+.rz-compose { background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:10px; margin-bottom:14px; }
+.rz-compose input, .rz-compose textarea { width:100%; box-sizing:border-box; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:8px 10px; font-size:14px; font-family:inherit; margin-bottom:8px; }
+.rz-compose textarea { min-height:64px; resize:vertical; }
+.rz-send { background:var(--accent); color:#fff; border:none; border-radius:8px; padding:9px 14px; font-size:14px; font-weight:600; cursor:pointer; width:100%; }
+.rz-list { display:flex; flex-direction:column; gap:10px; }
+.rz-item { background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:11px 12px; position:relative; }
+.rz-item.unread { border-left:3px solid #e53e3e; }
+.rz-item .rz-h { font-weight:700; font-size:14px; margin-bottom:3px; display:flex; align-items:center; gap:6px; }
+.rz-item .rz-txt { font-size:14px; white-space:pre-wrap; line-height:1.4; color:var(--text); }
+.rz-item .rz-meta { font-size:11px; color:var(--text2); margin-top:6px; }
+.rz-item .rz-del { position:absolute; top:8px; right:8px; background:none; border:none; color:var(--text2); font-size:15px; cursor:pointer; }
+.rz-empty { color:var(--text2); font-size:14px; text-align:center; padding:20px 0; }
+.hlp-card { max-width:600px; }
+.hlp-body { max-height:70vh; overflow-y:auto; }
+.hlp-sec { margin-bottom:16px; }
+.hlp-sec h4 { margin:0 0 6px; font-size:15px; color:var(--accent); }
+.hlp-sec ul { margin:0; padding-left:18px; }
+.hlp-sec li { font-size:13.5px; line-height:1.55; margin-bottom:4px; }
+.hlp-sec li b { color:var(--text); }
+.hlp-tip { background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-size:13px; color:var(--text2); margin-top:12px; }
 
 /* Panel úkolů – posuvný shora */
 #tasks-panel { position:fixed; top:0; left:0; right:0; bottom:0; z-index:3500; background:var(--bg); display:none; flex-direction:column; }
@@ -1103,6 +1133,8 @@ document.addEventListener('touchend', function(e){
   <h1><span class="title-prefix">II/176 </span><span class="title-name">Vacíkov–Zliv</span><span class="title-suffix"></span></h1>
   <div id="km-display">km –</div>
   <button id="btn-tasks" onclick="openTasksPanel()" title="Úkoly" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;">✅<span class="task-badge" id="task-badge">0</span></button>
+  <button id="btn-rozhlas" onclick="openRozhlas()" title="Rozhlas – co je nového" style="position:relative;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;">📢<span class="task-badge" id="rozhlas-badge">0</span></button>
+  <button id="btn-help" onclick="openHelp()" title="Nápověda k aplikaci" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;">❓</button>
   <button id="btn-denik" onclick="openDiaryPanel()" title="Deník stavby" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;">📓</button>
   <button id="btn-kzp"   onclick="openKzpPanel()"   title="Kvalita / KZP"   style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;">🧪</button>
   <button id="btn-standalone-foto" onclick="takeStandalonePhoto()" title="Vyfotit" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;">📷</button>
@@ -5891,6 +5923,90 @@ function openStats(){
 }
 function closeStats(){ document.getElementById('stats-modal').classList.remove('open'); }
 
+// ── Rozhlas – co je nového ─────────────────────────────────────────
+window.rozhlasData = {};
+function _rozhlasRead(){ return parseInt(localStorage.getItem('vacRozhlasRead')||'0',10)||0; }
+function loadRozhlas(){
+  if(!db) return;
+  db.ref('rozhlas').on('value', function(snap){
+    window.rozhlasData = snap.val() || {};
+    updateRozhlasBadge();
+    if(document.getElementById('rozhlas-modal').classList.contains('show')) renderRozhlas();
+  });
+}
+function _rozhlasSorted(){
+  var d = window.rozhlasData || {};
+  return Object.keys(d).map(function(k){ var o=d[k]||{}; o._id=k; return o; })
+    .sort(function(a,b){ return (b.ts||0)-(a.ts||0); });
+}
+function updateRozhlasBadge(){
+  var badge = document.getElementById('rozhlas-badge');
+  if(!badge) return;
+  var last = _rozhlasRead();
+  var n = _rozhlasSorted().filter(function(o){ return (o.ts||0) > last; }).length;
+  badge.textContent = n > 99 ? '99+' : n;
+  badge.classList.toggle('show', n > 0);
+}
+function openRozhlas(){
+  document.getElementById('rz-compose').style.display = isAdmin() ? '' : 'none';
+  document.getElementById('rozhlas-modal').classList.add('show');
+  renderRozhlas();
+  // označit vše jako přečtené
+  var items = _rozhlasSorted();
+  var newest = items.length ? (items[0].ts||0) : Date.now();
+  localStorage.setItem('vacRozhlasRead', String(Math.max(newest, _rozhlasRead())));
+  updateRozhlasBadge();
+}
+function closeRozhlas(){ document.getElementById('rozhlas-modal').classList.remove('show'); }
+function renderRozhlas(){
+  var box = document.getElementById('rz-list');
+  var items = _rozhlasSorted();
+  var last = _rozhlasRead();
+  if(!items.length){ box.innerHTML = '<div class="rz-empty">Zatím žádná oznámení.</div>'; return; }
+  box.innerHTML = items.map(function(o){
+    var when = o.ts ? _relTime(o.ts) : '';
+    var d = o.ts ? new Date(o.ts) : null;
+    var full = d ? (d.toLocaleDateString('cs-CZ')+' '+d.toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'})) : '';
+    var unread = (o.ts||0) > last ? ' unread' : '';
+    var canDel = isAdmin() || (window.currentUser && o.authorUid === window.currentUser.uid);
+    var del = canDel ? '<button class="rz-del" title="Smazat" onclick="deleteRozhlasItem(\''+o._id+'\')">🗑️</button>' : '';
+    var head = o.title ? '<div class="rz-h">📢 '+_esc(o.title)+'</div>' : '';
+    return '<div class="rz-item'+unread+'">'+del+head+
+      '<div class="rz-txt">'+_esc(o.text||'')+'</div>'+
+      '<div class="rz-meta">👤 '+_esc(o.author||'—')+' · '+full+' · '+when+'</div></div>';
+  }).join('');
+}
+function postRozhlas(){
+  if(!isAdmin()){ _permDenied(); return; }
+  var title = (document.getElementById('rz-title').value||'').trim();
+  var text  = (document.getElementById('rz-text').value||'').trim();
+  if(!text){ alert('Napiš text oznámení.'); return; }
+  var rec = {
+    title: title, text: text,
+    author: (window.currentUser&&window.currentUser.name)||'—',
+    authorUid: (window.currentUser&&window.currentUser.uid)||null,
+    ts: Date.now()
+  };
+  db.ref('rozhlas').push(rec).then(function(){
+    document.getElementById('rz-title').value='';
+    document.getElementById('rz-text').value='';
+    // vlastní příspěvek beru rovnou jako přečtený
+    localStorage.setItem('vacRozhlasRead', String(rec.ts));
+    updateRozhlasBadge();
+  }).catch(function(e){ alert('Nepodařilo se odeslat: '+e.message); });
+}
+function deleteRozhlasItem(id){
+  var o = (window.rozhlasData||{})[id]; if(!o) return;
+  if(!(isAdmin() || (window.currentUser && o.authorUid===window.currentUser.uid))){ _permDenied(); return; }
+  if(!confirm('Smazat toto oznámení?')) return;
+  db.ref('rozhlas/'+id).remove();
+}
+function _esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+// ── Nápověda ───────────────────────────────────────────────────────
+function openHelp(){ document.getElementById('help-modal').classList.add('show'); }
+function closeHelp(){ document.getElementById('help-modal').classList.remove('show'); }
+
 // Pokud Firebase Auth není nakonfigurován, nezablokuj appku –
 // jen schovej úkolníček (badge, panel) a appka pojede v "legacy" módu.
 if(!authConfigOk()) {
@@ -5974,6 +6090,7 @@ function completeLogin(user, nameOverride) {
   // Načíst data
   loadAllUsers();
   loadTasks();
+  loadRozhlas();
   loadPracovnici();
   loadStroje();
   setupFcmIfPossible();
@@ -10285,6 +10402,76 @@ function copyDiaryExport(){
       <button class="ua-btn ua-btn-red" onclick="closeUserAdmin();signOutUser();">🚪 Odhlásit se</button>
       <button class="ua-btn" onclick="openStats()">📊 Statistika</button>
       <button class="ua-btn" onclick="closeUserAdmin()">Zavřít</button>
+    </div>
+  </div>
+</div>
+
+<div id="rozhlas-modal" onclick="if(event.target===this)closeRozhlas()">
+  <div class="rz-card">
+    <div class="rz-top"><h3>📢 Rozhlas – co je nového</h3><button class="rz-x" onclick="closeRozhlas()">✕</button></div>
+    <div id="rz-compose" class="rz-compose" style="display:none;">
+      <input id="rz-title" type="text" maxlength="80" placeholder="Nadpis (nepovinný) – např. Uzavírka km 5,2">
+      <textarea id="rz-text" maxlength="1000" placeholder="Napiš oznámení pro celý tým…"></textarea>
+      <button class="rz-send" onclick="postRozhlas()">📢 Vyhlásit</button>
+    </div>
+    <div id="rz-list" class="rz-list"></div>
+  </div>
+</div>
+
+<div id="help-modal" onclick="if(event.target===this)closeHelp()">
+  <div class="hlp-card">
+    <div class="hlp-top"><h3>❓ Nápověda k aplikaci</h3><button class="hlp-x" onclick="closeHelp()">✕</button></div>
+    <div class="hlp-body">
+      <div class="hlp-sec">
+        <h4>🗺️ Mapa a staničení</h4>
+        <ul>
+          <li><b>km nahoře</b> se přepočítává z tvé GPS polohy podél trasy (km 3,400–8,450).</li>
+          <li><b>Klik na trasu / staničník</b> otevře panel „Situace" s <b>PD a přílohou PAU</b> pro dané místo.</li>
+          <li><b>☰ Vrstvy</b> – zapínání trasy, staničení, katastru, poznámek, úkolů, měření a fotomapy.</li>
+          <li><b>Podklad</b>: Outdoor / Basic / Letecká / OSM.</li>
+        </ul>
+      </div>
+      <div class="hlp-sec">
+        <h4>📷 Focení a galerie</h4>
+        <ul>
+          <li><b>📷</b> vyfotí a nahraje fotku (uloží se s časem, autorem a GPS).</li>
+          <li><b>🖼️ Galerie</b> – miniatury, změna hustoty mřížky (−/+), procházení <b>tažením</b> přes celou obrazovku.</li>
+          <li><b>Hromadné mazání</b> v galerii – označíš víc fotek naráz (jen své; admin vše).</li>
+          <li>Fotky se zobrazí i v mapě přes vrstvu <b>Fotky v mapě</b>.</li>
+        </ul>
+      </div>
+      <div class="hlp-sec">
+        <h4>📝 Poznámky a úkoly</h4>
+        <ul>
+          <li><b>📍➕ Place mode</b> – tlačítko + křížek na střed mapy pro přesné umístění poznámky/úkolu.</li>
+          <li><b>📝 Evidence poznámek</b> – seznam všech poznámek s filtrem.</li>
+          <li><b>✅ Úkoly</b>: stav otevřený → 🙋 <b>převzetí</b> (řeší se) → ✅ <b>hotovo</b> s výsledkem; 🔄 <b>předání</b> jinému. Vše se loguje do „📋 Průběh".</li>
+          <li>Odznak u ✅ ukazuje počet otevřených úkolů.</li>
+        </ul>
+      </div>
+      <div class="hlp-sec">
+        <h4>📏 Měření a výkresy</h4>
+        <ul>
+          <li><b>📏 Měření</b> na mapě – vzdálenost / obvod / plocha / bod, s uložením pro tým a <b>📐 evidencí</b>.</li>
+          <li><b>➕ v panelu výkresů</b> – nahraješ vlastní PDF/výkres přímo z aplikace (bez čehokoliv navíc).</li>
+        </ul>
+      </div>
+      <div class="hlp-sec">
+        <h4>📢 Rozhlas – co je nového</h4>
+        <ul>
+          <li>Kanál oznámení pro celý tým (uzavírky, změny, novinky).</li>
+          <li>Červený odznak = počet <b>nepřečtených</b>. Po otevření se označí jako přečtené.</li>
+          <li>Vyhlašovat může <b>admin/koordinátor</b>, číst všichni.</li>
+        </ul>
+      </div>
+      <div class="hlp-sec">
+        <h4>👥 Admin (jen koordinátor)</h4>
+        <ul>
+          <li>Klik na svůj profil vpravo nahoře → <b>Správa uživatelů</b>: práva na funkce, blokace, povýšení na admina.</li>
+          <li><b>📊 Statistika</b> – počty fotek/poznámek/úkolů/měření + nejaktivnější lidé.</li>
+        </ul>
+      </div>
+      <div class="hlp-tip">💡 Tip: appku si přidej na plochu (Sdílet → Přidat na plochu) – běží pak jako aplikace. Data (fotky, PDF) jsou soukromá, dostupná jen po přihlášení.</div>
     </div>
   </div>
 </div>

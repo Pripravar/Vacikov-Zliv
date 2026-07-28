@@ -50,6 +50,8 @@ Jednosouborová webová aplikace (velín) pro stavbu **II/176 Vacíkov-Nová Luk
 - **Fotky v mapě (fotomapa)** – vrstva s piny, vlastní právo.
 - **Statistika stavby** (📊 v admin panelu) – počty fotek/poznámek/úkolů/měření/výkresů + nejaktivnější lidé.
 - **PD i příloha PAU** nahrané na Storage a navázané na staničení (2 dokumenty).
+- **📢 Rozhlas – co je nového** – kanál oznámení pro celý tým (DB `/rozhlas`); červený odznak = počet nepřečtených (podle localStorage), po otevření se označí jako přečtené; vyhlašuje admin, čtou všichni.
+- **❓ Nápověda** – in‑app průvodce funkcemi (mapa, focení, poznámky/úkoly, měření, rozhlas, admin) – statický modal, bez DB.
 
 ## Backlog (zbývá)
 - Plynulé focení – upload na pozadí (fronta).
