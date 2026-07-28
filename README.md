@@ -33,8 +33,19 @@ Jednosouborová webová aplikace (velín) pro stavbu **II/176 Vacíkov-Nová Luk
 `MAPY_API_KEY`, `FIREBASE_CONFIG`, `FIREBASE_VAPID_KEY`, `FIREBASE_URL`, `KM_START/END`,
 `GPX_POINTS`, `CALIB_POINTS`, `GITHUB_USER_REPO`, `UPLOAD_FN_URL`.
 
-## Ještě není hotové (milník 2)
-- **Firebase Storage** – EU bucket + pravidla `auth != null` + CORS `*`; přesměrovat fotky i PDF sem.
-- **Převod technické specifikace (PD) do PDF** a navázání na staničení (panel výkresů).
-- **Cloud Function deploy** (push notifikace, denní záloha DB) přes Firebase CLI.
-- Stavební objekty / etapy (`STAVEBNI_OBJEKTY`, `SO_OBJEKTY`) – u téhle stavby minimálně (2 úseky/2 etapy).
+## Hotové funkce (nad rámec základu)
+- **Soukromé soubory přes Firebase Storage** (EU bucket, pravidla `auth != null`, CORS `*`) – fotky i PDF jen pro přihlášené; do DB se ukládají cesty, ne odkazy. Ověřeno: s tokenem 200, bez tokenu 403.
+- **PD (technická specifikace) jako PDF** na Storage, navázaná na staničení (klik na km 3,400–8,450 → panel).
+- **Správa uživatelů / práva** (admin panel 👥): per‑funkce práva (allow‑by‑default), blokování, povýšení na admina. Bootstrap admin = e‑mail koordinátora. Tvrdá brána = Firebase DB pravidla (`database.rules.json`, nasazeno).
+- **Mazání jen vlastních** (`canDeleteRecord`) – nové fotky nesou `ownerUid`; admin smaže vše, legacy bez vlastníka smí každý.
+- **Galerie:** nastavitelná hustota mřížky (−/+), procházení fotek **tažením** ve fullscreenu (šipky, počítadlo, klávesy ← → Esc).
+
+## Backlog (ještě neportováno ze skillu)
+- Plynulé focení – upload na pozadí (fronta, badge „nahrávám N").
+- Miniatury v galerii (thumbnails přes Storage).
+- Vkládání poznámky/úkolu tlačítkem + křížkem (place mode).
+- Nahrávání výkresů z aplikace + verzování (přes Storage).
+- Měření vzdálenosti/plochy + evidence.
+- Úkoly: převzetí / předání / dokončení s historií.
+- Hromadné mazání fotek z galerie.
+- (Odloženo dle zadání: dron podklad, 360° procházka, push notifikace.)

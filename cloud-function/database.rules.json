@@ -1,0 +1,13 @@
+{
+  "rules": {
+    ".read": true,
+    ".write": "auth != null && root.child('uzivatele').child(auth.uid).child('blocked').val() !== true",
+    "uzivatele": {
+      "$uid": {
+        "role":    { ".validate": "auth.token.email === 'arasid33@gmail.com' || root.child('uzivatele').child(auth.uid).child('role').val() === 'admin' || newData.val() === data.val()" },
+        "blocked": { ".validate": "auth.token.email === 'arasid33@gmail.com' || root.child('uzivatele').child(auth.uid).child('role').val() === 'admin' || newData.val() === data.val()" },
+        "perms":   { ".validate": "auth.token.email === 'arasid33@gmail.com' || root.child('uzivatele').child(auth.uid).child('role').val() === 'admin'" }
+      }
+    }
+  }
+}
