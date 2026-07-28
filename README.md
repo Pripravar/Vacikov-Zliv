@@ -38,14 +38,17 @@ Jednosouborová webová aplikace (velín) pro stavbu **II/176 Vacíkov-Nová Luk
 - **PD (technická specifikace) jako PDF** na Storage, navázaná na staničení (klik na km 3,400–8,450 → panel).
 - **Správa uživatelů / práva** (admin panel 👥): per‑funkce práva (allow‑by‑default), blokování, povýšení na admina. Bootstrap admin = e‑mail koordinátora. Tvrdá brána = Firebase DB pravidla (`database.rules.json`, nasazeno).
 - **Mazání jen vlastních** (`canDeleteRecord`) – nové fotky nesou `ownerUid`; admin smaže vše, legacy bez vlastníka smí každý.
-- **Galerie:** nastavitelná hustota mřížky (−/+), procházení fotek **tažením** ve fullscreenu (šipky, počítadlo, klávesy ← → Esc).
+- **Galerie:** miniatury (rychlé načítání), nastavitelná hustota mřížky (−/+), procházení fotek **tažením** ve fullscreenu (šipky, počítadlo, klávesy).
+- **Place mode** – tlačítko 📍➕ + křížek na střed mapy (spolehlivější než long‑press).
+- **Uložit / obnovit pohled** mapy (💾 Uložit / 📍 Můj / ⌂ Výchozí ve Vrstvách).
+- **Vrstvy vyčištěné** – odebrány template objekty, které stavba nemá; pod‑vrstvy poznámek/úkolů se zobrazí až po zapnutí hlavního přepínače; sekce mají práva (`data-perm`).
 
-## Backlog (ještě neportováno ze skillu)
-- Plynulé focení – upload na pozadí (fronta, badge „nahrávám N").
-- Miniatury v galerii (thumbnails přes Storage).
-- Vkládání poznámky/úkolu tlačítkem + křížkem (place mode).
-- Nahrávání výkresů z aplikace + verzování (přes Storage).
+## Backlog (další dávka)
+- Nahrávání PDF/výkresů z aplikace (přes Storage) – umožní doplnit i přílohu **PAU** bez servisního klíče.
 - Měření vzdálenosti/plochy + evidence.
 - Úkoly: převzetí / předání / dokončení s historií.
 - Hromadné mazání fotek z galerie.
-- (Odloženo dle zadání: dron podklad, 360° procházka, push notifikace.)
+- Fotky v mapě (fotomapa) jako vrstva.
+- Statistika nejpoužívanějších funkcí.
+- Plynulé focení – upload na pozadí.
+- (Odloženo dle zadání: dron, 360°, push notifikace.)

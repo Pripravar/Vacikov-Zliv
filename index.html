@@ -1101,6 +1101,11 @@ document.addEventListener('touchend', function(e){
     <button class="bm-btn" onclick="setBasemap('aerial',this)">Letecká</button>
     <button class="bm-btn active" id="osm-btn" onclick="setBasemap('osm',this)">OSM</button>
   </div>
+  <div style="display:flex;gap:6px;margin:6px 0 2px;">
+    <button onclick="saveMapView()" title="Uložit aktuální výřez jako svůj pohled" style="flex:1;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 4px;font-size:12px;cursor:pointer;">💾 Uložit pohled</button>
+    <button onclick="gotoSavedMapView(true)" title="Přejít na uložený pohled" style="flex:1;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 4px;font-size:12px;cursor:pointer;">📍 Můj pohled</button>
+    <button onclick="resetMapView()" title="Obnovit výchozí (celá trasa)" style="flex:1;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 4px;font-size:12px;cursor:pointer;">⌂ Výchozí</button>
+  </div>
   <div class="layer-row">
     <label>🗺️ Katastr (KN)</label>
     <label class="toggle"><input type="checkbox" id="lyr-katastr" onchange="toggleKatastr(this.checked)"><span class="toggle-slider"></span></label>
@@ -1118,10 +1123,12 @@ document.addEventListener('touchend', function(e){
     <label>📐 Staničení 20m</label>
     <label class="toggle"><input type="checkbox" id="lyr-st20" onchange="toggleLayer('st20',this.checked)"><span class="toggle-slider"></span></label>
   </div>
+  <div data-perm="pripominky">
   <div class="layer-row">
     <label>📝 Poznámky</label>
     <label class="toggle"><input type="checkbox" id="lyr-notes" onchange="toggleNotesLayer(this.checked)"><span class="toggle-slider"></span></label>
   </div>
+  <div id="notes-sublayers" style="display:none;">
   <div class="layer-row" style="padding-left:12px;">
     <label style="font-size:12px;">↳ 📌 Obecná</label>
     <label class="toggle"><input type="checkbox" id="lyr-notes0" onchange="toggleLayer('notes0',this.checked)"><span class="toggle-slider"></span></label>
@@ -1150,10 +1157,14 @@ document.addEventListener('touchend', function(e){
     <label style="font-size:12px;" id="notes-lbl-6">↳ 🏷️ Vlastní</label>
     <label class="toggle"><input type="checkbox" id="lyr-notes6" onchange="toggleLayer('notes6',this.checked)"><span class="toggle-slider"></span></label>
   </div>
+  </div><!-- /notes-sublayers -->
+  </div><!-- /data-perm pripominky -->
+  <div data-perm="ukoly">
   <div class="layer-row">
     <label>✅ Úkoly</label>
     <label class="toggle"><input type="checkbox" id="lyr-tasks" checked onchange="toggleTasksLayer(this.checked)"><span class="toggle-slider"></span></label>
   </div>
+  <div id="tasks-sublayers" style="display:none;">
   <div class="layer-row" style="padding-left:12px;">
     <label style="font-size:12px;">↳ 🟡 Otevřené</label>
     <label class="toggle"><input type="checkbox" id="lyr-tasks-open" checked onchange="toggleTaskSubLayer('open',this.checked)"><span class="toggle-slider"></span></label>
@@ -1162,18 +1173,8 @@ document.addEventListener('touchend', function(e){
     <label style="font-size:12px;">↳ 🟢 Hotové</label>
     <label class="toggle"><input type="checkbox" id="lyr-tasks-done" onchange="toggleTaskSubLayer('done',this.checked)"><span class="toggle-slider"></span></label>
   </div>
-  <div class="layer-row">
-    <label>🔵 Propustky (SO 104, SO 105)</label>
-    <label class="toggle"><input type="checkbox" id="lyr-prop" checked onchange="toggleLayer('propustky',this.checked)"><span class="toggle-slider"></span></label>
-  </div>
-  <div class="layer-row">
-    <label>🧩 Doplňkové SO (000/300/400/500)</label>
-    <label class="toggle"><input type="checkbox" id="lyr-doplnky" checked onchange="toggleLayer('doplnky',this.checked)"><span class="toggle-slider"></span></label>
-  </div>
-  <div class="layer-row">
-    <label>🏗️ Stavební objekty SO</label>
-    <label class="toggle"><input type="checkbox" id="lyr-so" checked onchange="toggleLayer('so',this.checked)"><span class="toggle-slider"></span></label>
-  </div>
+  </div><!-- /tasks-sublayers -->
+  </div><!-- /data-perm ukoly -->
   <div class="layer-row">
     <label>📍 GPS poloha</label>
     <label class="toggle"><input type="checkbox" id="lyr-gps" checked onchange="toggleGPS(this.checked)"><span class="toggle-slider"></span></label>
@@ -2220,6 +2221,28 @@ function centerGPS() {
 
 // ── VRSTVY ────────────────────────────
 
+// Uložit / obnovit vlastní pohled (střed + zoom) v localStorage
+function saveMapView(){
+  if(!map) return;
+  try{
+    var c=map.getCenter();
+    localStorage.setItem('vacSavedView', JSON.stringify({lat:c.lat, lng:c.lng, z:map.getZoom()}));
+    showToast('💾 Pohled uložen', 1800);
+  }catch(e){}
+}
+function gotoSavedMapView(notify){
+  if(!map) return false;
+  try{
+    var v=JSON.parse(localStorage.getItem('vacSavedView')||'null');
+    if(v && typeof v.lat==='number'){
+      map.setView([v.lat, v.lng], v.z || map.getZoom());
+      if(notify) showToast('📍 Tvůj pohled', 1500);
+      return true;
+    }
+  }catch(e){}
+  if(notify) showToast('Zatím nemáš uložený pohled — nejdřív „💾 Uložit pohled".', 2600);
+  return false;
+}
 function resetMapView() {
   if(!map) return;
   // Vždy se vejdi na CELOU osu této stavby — NIKDY natvrdo souřadnice (jinak „Domů" skočí na cizí stavbu)!
@@ -2274,7 +2297,7 @@ function init() {
   buildPropustky();
   buildDoplnky();
   buildVedeniNN();
-  map.fitBounds(L.latLngBounds(GPX_POINTS.map(function(p){return[p[0],p[1]];})),{padding:[40,40]});
+  if(!gotoSavedMapView(false)) map.fitBounds(L.latLngBounds(GPX_POINTS.map(function(p){return[p[0],p[1]];})),{padding:[40,40]});
   startGPS();
   loadNotes();
   initLongPress();
@@ -3688,6 +3711,7 @@ function deleteCurrentNote() {
 
 // ── Layer toggle pro poznámky ──────────────────────────
 function toggleNotesLayer(en) {
+  var sub=document.getElementById('notes-sublayers'); if(sub) sub.style.display = en ? '' : 'none';
   if(!notesLayer) return;
   en ? notesLayer.addTo(map) : map.removeLayer(notesLayer);
 }
@@ -6294,6 +6318,7 @@ function renderTasksOnMap() {
 
 function toggleTasksLayer(visible) {
   window.tasksLayerVisible = visible;
+  var sub=document.getElementById('tasks-sublayers'); if(sub) sub.style.display = visible ? '' : 'none';
   if(!window.tasksLayer) return;
   if(visible) {
     if(!map.hasLayer(window.tasksLayer)) window.tasksLayer.addTo(map);
@@ -6305,6 +6330,15 @@ function toggleTaskSubLayer(which, visible) {
   window.taskSubLayers[which] = visible;
   renderTasksOnMap();
 }
+// Sync viditelnosti pod-vrstev dle stavu hlavních přepínačů (poznámky skryté, úkoly dle checked)
+function _syncSubLayerVisibility(){
+  var n=document.getElementById('lyr-notes'), ns=document.getElementById('notes-sublayers');
+  if(n&&ns) ns.style.display = n.checked ? '' : 'none';
+  var t=document.getElementById('lyr-tasks'), ts=document.getElementById('tasks-sublayers');
+  if(t&&ts) ts.style.display = t.checked ? '' : 'none';
+}
+if(document.readyState!=='loading') _syncSubLayerVisibility();
+else document.addEventListener('DOMContentLoaded', _syncSubLayerVisibility);
 
 // ── PWA: service worker registrace ──────────────────────────────────
 function registerServiceWorker() {
