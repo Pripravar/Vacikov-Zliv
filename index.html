@@ -109,6 +109,17 @@ body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui
 
 #btn-gps { position:fixed; bottom:24px; right:16px; width:48px; height:48px; border-radius:50%; background:var(--panel2); border:2px solid var(--border); color:var(--text); font-size:22px; cursor:pointer; z-index:1500; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 16px rgba(0,0,0,.4); transition:all .2s; }
 #btn-gps.active { border-color:var(--green); color:var(--green); box-shadow:0 0 16px rgba(72,187,120,.4); }
+#btn-place { position:fixed; bottom:82px; right:16px; width:48px; height:48px; border-radius:50%; background:var(--panel2); border:2px solid var(--border); color:var(--text); font-size:20px; cursor:pointer; z-index:1500; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 16px rgba(0,0,0,.4); }
+#btn-place.active { border-color:#e94560; color:#e94560; }
+#map-crosshair { display:none; position:fixed; width:44px; height:44px; transform:translate(-50%,-50%); pointer-events:none; z-index:1200; }
+#map-crosshair::before, #map-crosshair::after { content:''; position:absolute; background:#e94560; box-shadow:0 0 0 1.5px #fff, 0 0 4px rgba(0,0,0,.6); }
+#map-crosshair::before { left:50%; top:0; width:3px; height:100%; transform:translateX(-50%); }
+#map-crosshair::after { top:50%; left:0; height:3px; width:100%; transform:translateY(-50%); }
+#place-bar { display:none; position:fixed; bottom:0; left:0; right:0; z-index:4500; background:rgba(15,20,40,.96); border-top:1px solid var(--border); padding:12px 14px calc(12px + env(safe-area-inset-bottom)); flex-direction:column; gap:10px; align-items:center; }
+#place-bar.open { display:flex; }
+#place-bar .pb-text { font-size:14px; color:var(--text); text-align:center; }
+#place-bar .pb-btns { display:flex; gap:10px; }
+#place-bar button { border:none; border-radius:10px; padding:12px 20px; font-size:15px; font-weight:700; cursor:pointer; min-height:44px; }
 
 #toast { position:fixed; bottom:80px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:8px 16px; font-size:13px; z-index:3000; opacity:0; transition:all .3s; white-space:nowrap; pointer-events:none; }
 #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
@@ -1175,6 +1186,15 @@ document.addEventListener('touchend', function(e){
 </div>
 
 <button id="btn-gps" onclick="toggleGpsBtn()" title="GPS zapnout/vypnout / centrovat">📍</button>
+<button id="btn-place" onclick="startPlaceMode()" title="Přidat poznámku/úkol na střed mapy">📍➕</button>
+<div id="map-crosshair"></div>
+<div id="place-bar">
+  <div class="pb-text" id="place-bar-text">Najeď křížkem na místo a potvrď</div>
+  <div class="pb-btns">
+    <button onclick="cancelPlaceMode()" style="background:var(--panel2);color:var(--text);border:1px solid var(--border);">Zrušit</button>
+    <button onclick="confirmPlace()" style="background:#e94560;color:#fff;">📍 Tady</button>
+  </div>
+</div>
 <div id="toast"></div>
 
 <div id="pdf-panel" style="touch-action:pan-x pan-y pinch-zoom;">
@@ -2687,6 +2707,47 @@ function initLongPress() {
 function lpCancel() {
   document.getElementById('lp-chooser').classList.remove('open');
   _lpLat = _lpLng = null;
+}
+
+// ── Place mode: tlačítko + křížek na střed mapy (náhrada long-pressu) ──
+function _positionCrosshair(){
+  var mapEl=document.getElementById('map'); if(!mapEl) return;
+  var r=mapEl.getBoundingClientRect();
+  var ch=document.getElementById('map-crosshair');
+  if(ch){ ch.style.left=(r.left+r.width/2)+'px'; ch.style.top=(r.top+r.height/2)+'px'; }
+}
+function _placeKmText(){
+  var t='Najeď křížkem na místo a potvrď';
+  try{ var c=map.getCenter(); if(typeof gpsToKm==='function'){ var km=gpsToKm(c.lat,c.lng); if(km!==null&&km!==undefined) t='km '+km.toFixed(3)+' — potvrď umístění'; } }catch(e){}
+  var el=document.getElementById('place-bar-text'); if(el) el.textContent=t;
+}
+function _onPlaceMove(){ _placeKmText(); }
+function startPlaceMode(){
+  if(!_perm('pripominky')) return;
+  document.getElementById('lp-chooser').classList.remove('open');
+  document.getElementById('map-crosshair').style.display='block';
+  document.getElementById('place-bar').classList.add('open');
+  var b=document.getElementById('btn-place'); if(b) b.classList.add('active');
+  _positionCrosshair(); _placeKmText();
+  map.on('move', _onPlaceMove);
+  window.addEventListener('resize', _positionCrosshair);
+}
+function cancelPlaceMode(){
+  document.getElementById('map-crosshair').style.display='none';
+  document.getElementById('place-bar').classList.remove('open');
+  var b=document.getElementById('btn-place'); if(b) b.classList.remove('active');
+  map.off('move', _onPlaceMove);
+  window.removeEventListener('resize', _positionCrosshair);
+}
+function confirmPlace(){
+  var c=map.getCenter();
+  _lpLat=c.lat; _lpLng=c.lng;
+  cancelPlaceMode();
+  if(typeof authConfigOk==='function' && !authConfigOk()){ lpChoose('note'); return; }
+  var kmTxt='';
+  try{ if(typeof gpsToKm==='function'){ var km=gpsToKm(c.lat,c.lng); if(km!==null&&km!==undefined) kmTxt=' (km '+km.toFixed(3)+')'; } }catch(e){}
+  document.getElementById('lp-km-info').textContent='📍 Co tady přidat?'+kmTxt;
+  document.getElementById('lp-chooser').classList.add('open');
 }
 function lpChoose(kind) {
   document.getElementById('lp-chooser').classList.remove('open');
@@ -4722,6 +4783,21 @@ function _showContinuePrompt() {
   document.getElementById('photo-prompt-modal').classList.add('open');
 }
 
+// Zmenší dataURL na max hranu maxPx (kvalita q) → cb(dataUrl) nebo cb(null) při chybě.
+function resizeImageMax(dataUrl, maxPx, q, cb){
+  try{
+    var img = new Image();
+    img.onload = function(){
+      var w=img.width, h=img.height;
+      if(w>maxPx || h>maxPx){ if(w>h){ h=Math.round(h*maxPx/w); w=maxPx; } else { w=Math.round(w*maxPx/h); h=maxPx; } }
+      var c=document.createElement('canvas'); c.width=w; c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      try{ cb(c.toDataURL('image/jpeg', q||0.5)); }catch(e){ cb(null); }
+    };
+    img.onerror=function(){ cb(null); };
+    img.src=dataUrl;
+  }catch(e){ cb(null); }
+}
 // Promise-wrapper pro callback-style uploadPhotoToGitHub
 function uploadPhotoToGitHubP(dataUrl, filename) {
   return new Promise(function(resolve){
@@ -4786,18 +4862,29 @@ function ppAnswer(yes) {
             if(urlStamp) entry.urlStamped  = urlStamp;
 
             var key = String(t);
-            db.ref('standalone_photos/' + key).set(entry)
-              .then(function() {
-                sess.count++;
-                hideSync();
-                if(!url2) showToast('⚠ Druhá verze se nenahrála, máš jen ' + (yes?'s razítkem':'originál'), 3000);
-                _showContinuePrompt();
-              })
-              .catch(function() {
-                hideSync();
-                showToast('❌ Chyba uložení do DB', 2500);
-                _showContinuePrompt();
+            var visibleSrc = yes ? stampedDataUrl : compressed;
+            function _saveStandalone(){
+              db.ref('standalone_photos/' + key).set(entry)
+                .then(function() {
+                  sess.count++;
+                  hideSync();
+                  if(!url2) showToast('⚠ Druhá verze se nenahrála, máš jen ' + (yes?'s razítkem':'originál'), 3000);
+                  _showContinuePrompt();
+                })
+                .catch(function() {
+                  hideSync();
+                  showToast('❌ Chyba uložení do DB', 2500);
+                  _showContinuePrompt();
+                });
+            }
+            // Miniatura (best-effort — kvůli náhledu fotku nikdy neztratit)
+            resizeImageMax(visibleSrc, 400, 0.5, function(thumbData){
+              if(!thumbData){ _saveStandalone(); return; }
+              uploadPhotoToGitHubP(thumbData, 'standalone/foto_' + t + '_t.jpg').then(function(tp){
+                if(tp) entry.thumb = tp;
+                _saveStandalone();
               });
+            });
           });
         }, 600);
       });
@@ -4978,7 +5065,7 @@ function _galleryItemEl(item) {
   div.setAttribute('data-gk', k);
   if(gallerySelectedKeys[k]) div.classList.add('selected');
   var img = document.createElement('img');
-  setResolvedSrc(img, item.url); img.loading = 'lazy';
+  setResolvedSrc(img, item.thumb || item.url); img.loading = 'lazy';
   (function(it, divRef) {
     img.onclick = function() {
       if(gallerySelectMode) { _toggleGallerySelection(it, divRef); }
@@ -5145,7 +5232,7 @@ var FEATURES = [
   {key:'pdf',       label:'Prohlížení výkresů / PD (PDF)', btns:[]},
   {key:'foto',      label:'Focení',                    btns:['btn-standalone-foto']},
   {key:'galerie',   label:'Galerie fotek',             btns:['btn-gallery']},
-  {key:'pripominky',label:'Poznámky a úkoly na mapě',  btns:['btn-notes-evidence']},
+  {key:'pripominky',label:'Poznámky a úkoly na mapě',  btns:['btn-notes-evidence','btn-place']},
   {key:'ukoly',     label:'Úkolníček',                 btns:['btn-tasks']},
   {key:'denik',     label:'Deník / šichtovka',         btns:['btn-denik']},
   {key:'kvalita',   label:'Kvalita / KZP',             btns:['btn-kzp']}
