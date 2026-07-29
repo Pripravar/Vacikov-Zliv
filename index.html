@@ -2481,10 +2481,9 @@ function init() {
   buildVedeniNN();
   if(!gotoSavedMapView(false)) map.fitBounds(L.latLngBounds(GPX_POINTS.map(function(p){return[p[0],p[1]];})),{padding:[40,40]});
   startGPS();
-  loadNotes();
-  loadVykresy();
-  loadMereni();
-  loadStandalonePhotos();
+  // POZOR: loadNotes/loadVykresy/loadMereni/loadStandalonePhotos čtou z DB (auth != null)
+  // → NESMÍ běžet tady v init() (window.load, PŘED přihlášením), jinak se listenery zruší
+  // na permission-denied a po loginu se už neobnoví. Volají se z completeLogin() PO přihlášení.
   initLongPress();
   // Zastavit touch eventy z panelů aby nešly do Leaflet mapy
   ['pdf-panel','prop-panel'].forEach(function(id) {
@@ -6091,6 +6090,13 @@ function completeLogin(user, nameOverride) {
   loadAllUsers();
   loadTasks();
   loadRozhlas();
+  // Data z DB, která dřív načítal init() PŘED loginem — teď až tady, po přihlášení
+  // (DB má .read: auth != null, takže před loginem by se listenery zrušily). Idempotentní:
+  // onAuthStateChanged→completeLogin může přijít víckrát, load* jen přepíšou .on() listener.
+  loadNotes();
+  loadVykresy();
+  loadMereni();
+  loadStandalonePhotos();
   loadPracovnici();
   loadStroje();
   setupFcmIfPossible();

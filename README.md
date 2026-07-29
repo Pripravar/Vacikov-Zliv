@@ -24,7 +24,12 @@ Jednosouborová webová aplikace (velín) pro stavbu **II/176 Vacíkov-Nová Luk
 | `cloud-function/` | Cloud Functions (push/zálohy). Fotky NEjdou přes GitHub — jdou na Storage. |
 
 ## Backend – co je nastaveno
-- **Realtime Database** (europe-west1), pravidla: `{ ".read": true, ".write": "auth != null" }`.
+- **Realtime Database** (europe-west1), pravidla: **`".read": "auth != null"`** (NE `true` — jinak by
+  si kdokoli bez loginu stáhl přes veřejnou `databaseURL` všechna metadata: jména, GPS, e-maily, telefony),
+  `".write": "auth != null && !blocked"`. Nasazeno `firebase deploy --only database`.
+  ⚠️ **Souvislost s kódem:** protože DB nejde číst bez loginu, `loadNotes/loadVykresy/loadMereni/
+  loadStandalonePhotos` se volají až z `completeLogin()` (PO přihlášení), **ne** z `init()` (`window.load`,
+  před loginem) — jinak by se `.on()` listenery zrušily na permission-denied a po loginu neobnovily.
 - **Google Auth** zapnutý; autorizovaná doména `pripravar.github.io`.
 - **Blaze plán** aktivní (fakturační účet „Můj fakturační účet").
 - **Cloud Messaging** VAPID klíč vygenerován (v `index.html`).
