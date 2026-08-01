@@ -3198,6 +3198,9 @@ function setFotoMapaVisible(on){
 }
 
 // ── 360° procházka trasou (Pannellum) ────────────────────────────────
+// Výchozí natočení pohledu při otevření panoramatu (stupně, + = doprava).
+// GoPro ukládá střed snímku kolmo na směr jízdy (koukalo se do pole) → 90 = po silnici.
+var PANO_INIT_YAW = 90;
 window.pano360Data = {};
 function loadPanorama360(){
   if(!db) return;
@@ -3276,7 +3279,7 @@ function openPano360(id){
     try{
       window._panoViewer = pannellum.viewer('pano-viewer', {
         type:'equirectangular', panorama:url, autoLoad:true, showControls:false,
-        hfov:110, minHfov:50, maxHfov:120, crossOrigin:'anonymous', hotSpots:hotSpots
+        yaw:PANO_INIT_YAW, hfov:110, minHfov:50, maxHfov:120, crossOrigin:'anonymous', hotSpots:hotSpots
       });
     }catch(e){ showToast('❌ Prohlížeč 360° selhal',2500); }
   });
