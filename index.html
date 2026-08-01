@@ -820,6 +820,15 @@ textarea.note-field { min-height:80px; resize:vertical; }
 .rz-item .rz-meta { font-size:11px; color:var(--text2); margin-top:6px; }
 .rz-item .rz-del { position:absolute; top:8px; right:8px; background:none; border:none; color:var(--text2); font-size:15px; cursor:pointer; }
 .rz-empty { color:var(--text2); font-size:14px; text-align:center; padding:20px 0; }
+.rz-tabs { display:flex; gap:6px; margin-bottom:12px; }
+.rz-tab { flex:1; background:var(--panel2); border:1px solid var(--border); border-radius:8px; color:var(--text2); padding:8px 6px; font-size:13px; font-weight:600; cursor:pointer; }
+.rz-tab.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+.rz-nov { background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:11px 12px; }
+.rz-nov.unread { border-left:3px solid #e53e3e; }
+.rz-nov .rz-nov-h { display:flex; align-items:baseline; gap:8px; margin-bottom:4px; flex-wrap:wrap; }
+.rz-nov .rz-nov-date { font-size:11px; color:var(--text2); font-weight:700; }
+.rz-nov .rz-nov-ver { font-size:10px; color:var(--accent2); background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:1px 5px; }
+.rz-nov .rz-nov-txt { font-size:13.5px; line-height:1.45; color:var(--text); white-space:pre-wrap; }
 .hlp-card { max-width:600px; }
 .hlp-body { max-height:70vh; overflow-y:auto; }
 .hlp-sec { margin-bottom:16px; }
@@ -6078,8 +6087,22 @@ function openStats(){
 }
 function closeStats(){ document.getElementById('stats-modal').classList.remove('open'); }
 
-// ── Rozhlas – co je nového ─────────────────────────────────────────
+// ── „Co je nového" — changelog aplikace (udržuje vývojář, nejnovější nahoře) ──
+// PRAVIDLO: s každou novou funkcí přidej řádek sem (datum YYYY-MM-DD) + aktualizuj Nápovědu.
+var APP_NOVINKY = [
+  {datum:'2026-08-01', verze:'kvalita', text:'🧪 Kvalita: nahrání TePř a KZP přímo z aplikace (📤 Nahrát PDF) – TePř jde i podepsat (✍️). Dokumenty jsou soukromé (Storage, jen pro přihlášené).'},
+  {datum:'2026-08-01', verze:'360°', text:'🌐 360° procházka trasou (Street View) – nová vrstva „360° procházka" ve Vrstvách. Klik na 🌐 bod otevře panorama; nahoru = vpřed po trase, dolů = zpět (⏫⏬ rychle o 4, ▲▼ po jedné).'},
+  {datum:'2026-08-01', verze:'foto', text:'📷 Plynulé focení – po vyfocení hned fotíš dál, nahrávání běží na pozadí (odznak „⏳ Nahrávám…"). Nemusíš čekat mezi snímky.'},
+  {datum:'2026-08-01', verze:'osa',  text:'📏 Oprava staničení – konec trasy (KÚ = km 8,450) teď sedí na skutečný konec stavby (kde končí street-view). Dřív byl posunutý o ~280 m.'},
+  {datum:'2026-07-28', verze:'práva',text:'👥 Správa uživatelů a práva (admin), 📊 statistika, 📢 Rozhlas a ❓ Nápověda.'},
+  {datum:'2026-07-28', verze:'mapa', text:'📐 Měření na mapě + evidence, 📍 vkládání bodů křížkem, 🗺️ fotky v mapě, uložení/obnovení pohledu, hromadné mazání fotek.'},
+  {datum:'2026-07-28', verze:'úkoly',text:'✅ Úkoly: převzetí → řeší se → hotovo (s výsledkem) a předání jinému, s historií „📋 Průběh".'}
+];
+// ── Rozhlas – oznámení týmu + „Co je nového" ───────────────────────
 window.rozhlasData = {};
+function _novinkySeen(){ return localStorage.getItem('vacNovinkySeen') || ''; }
+function _novinkyLatest(){ return APP_NOVINKY.length ? APP_NOVINKY[0].datum : ''; }
+function _novinkyUnread(){ var s=_novinkySeen(); return APP_NOVINKY.filter(function(n){ return (n.datum||'') > s; }).length; }
 function _rozhlasRead(){ return parseInt(localStorage.getItem('vacRozhlasRead')||'0',10)||0; }
 function loadRozhlas(){
   if(!db) return;
@@ -6098,15 +6121,40 @@ function updateRozhlasBadge(){
   var badge = document.getElementById('rozhlas-badge');
   if(!badge) return;
   var last = _rozhlasRead();
-  var n = _rozhlasSorted().filter(function(o){ return (o.ts||0) > last; }).length;
+  var nRoz = _rozhlasSorted().filter(function(o){ return (o.ts||0) > last; }).length;
+  var n = nRoz + _novinkyUnread();
   badge.textContent = n > 99 ? '99+' : n;
   badge.classList.toggle('show', n > 0);
+}
+function setRozhlasTab(tab){
+  var isNov = (tab === 'novinky');
+  document.getElementById('rz-tab-novinky').classList.toggle('active', isNov);
+  document.getElementById('rz-tab-rozhlas').classList.toggle('active', !isNov);
+  document.getElementById('rz-pane-novinky').style.display = isNov ? '' : 'none';
+  document.getElementById('rz-pane-rozhlas').style.display = isNov ? 'none' : '';
+}
+function renderNovinky(){
+  var box = document.getElementById('rz-novinky');
+  if(!box) return;
+  var seen = _novinkySeen();
+  if(!APP_NOVINKY.length){ box.innerHTML = '<div class="rz-empty">Zatím žádné novinky.</div>'; return; }
+  box.innerHTML = APP_NOVINKY.map(function(n){
+    var unread = (n.datum||'') > seen ? ' unread' : '';
+    var ver = n.verze ? '<span class="rz-nov-ver">'+_esc(n.verze)+'</span>' : '';
+    return '<div class="rz-nov'+unread+'">'+
+      '<div class="rz-nov-h"><span class="rz-nov-date">'+_esc(n.datum||'')+'</span>'+ver+'</div>'+
+      '<div class="rz-nov-txt">'+_esc(n.text||'')+'</div></div>';
+  }).join('');
 }
 function openRozhlas(){
   document.getElementById('rz-compose').style.display = isAdmin() ? '' : 'none';
   document.getElementById('rozhlas-modal').classList.add('show');
+  // otevři na záložce, kde je něco nepřečteného (přednost novinky)
+  setRozhlasTab(_novinkyUnread() > 0 ? 'novinky' : (_rozhlasSorted().filter(function(o){return (o.ts||0)>_rozhlasRead();}).length ? 'rozhlas' : 'novinky'));
+  renderNovinky();
   renderRozhlas();
-  // označit vše jako přečtené
+  // označit vše jako přečtené (novinky i rozhlas)
+  localStorage.setItem('vacNovinkySeen', _novinkyLatest());
   var items = _rozhlasSorted();
   var newest = items.length ? (items[0].ts||0) : Date.now();
   localStorage.setItem('vacRozhlasRead', String(Math.max(newest, _rozhlasRead())));
@@ -8383,6 +8431,48 @@ function closeKzpPanel(){
   document.getElementById('kzp-panel').classList.remove('open');
 }
 
+// ── Nahrání TePř / KZP z aplikace (Storage SDK pod loginem – BEZ klíče) ──
+function kzpUploadStart(){
+  if(!_perm('kvalita')) return;
+  if(!(fbAuth&&fbAuth.currentUser)){ showToast('❌ Přihlas se pro nahrání', 2500); return; }
+  var isTepr = confirm('Jaký dokument nahráváš?\n\nOK = 📋 TePř (technologický předpis – půjde podepsat)\nZrušit = 🧪 KZP / jiný dokument kvality');
+  window._kzpUploadTyp = isTepr ? 'tepr' : 'kzp';
+  var inp=document.getElementById('kzp-file-input'); if(inp){ inp.value=''; inp.click(); }
+}
+function kzpUploadFilePicked(input){
+  var file=input.files&&input.files[0]; if(!file) return;
+  if(!/\.pdf$/i.test(file.name)){ showToast('❌ Jen PDF soubory', 2500); return; }
+  if(file.size > 24*1024*1024){ showToast('❌ PDF je moc velké (max 24 MB)', 3000); return; }
+  if(!fbStorage || !(fbAuth&&fbAuth.currentUser)){ showToast('❌ Přihlas se pro nahrání', 2500); return; }
+  var typ = window._kzpUploadTyp || 'kzp';
+  var nazev = prompt((typ==='tepr'?'Název TePř:':'Název KZP / dokumentu:'), file.name.replace(/\.pdf$/i,''));
+  if(nazev===null) return;
+  var t=Date.now();
+  var folder = (typ==='tepr') ? 'pdf/Tepr/' : 'pdf/KZP/';
+  var path = folder + t + '_' + _sanitizeFname(nazev) + '.pdf';
+  showSync('⏳ Nahrávám PDF…');
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var base64=(e.target.result||'').replace(/^data:[^;]+;base64,/,'');
+    fbStorage.ref(path).putString(base64,'base64',{contentType:'application/pdf'})
+      .then(function(){
+        var id = (typ==='tepr'?'tepr_':'kzp_') + t;
+        var rec = {
+          typ: typ, pdfUrl: path, so: 'II/176 Vacíkov–Zliv',
+          nazev: nazev,                              // 'nazev' je nutné, aby položku refreshKzpAll pustil
+          ownerUid:(window.currentUser&&window.currentUser.uid)||null,
+          author:(window.currentUser&&window.currentUser.name)||'', ts:t
+        };
+        if(typ!=='tepr') rec.technologickaCast = nazev;   // KZP se v listu zobrazuje přes technologickaCast
+        return db.ref('kvalita/'+id).set(rec);
+      })
+      .then(function(){ hideSync(); showToast('✅ '+(typ==='tepr'?'TePř':'KZP')+' nahráno', 2200); })
+      .catch(function(err){ hideSync(); console.error('uploadKzp:', err); showToast('❌ Nahrání selhalo: '+((err&&err.code)||''), 4000); });
+  };
+  reader.onerror=function(){ hideSync(); showToast('❌ Nepodařilo se načíst soubor', 2500); };
+  reader.readAsDataURL(file);
+}
+
 // Sloučí KZP seed + TePř seed + manuální záznamy z Firebase.
 // Ignoruje staré položky bez 'nazev' (zbytky z první verze).
 function refreshKzpAll(){
@@ -8968,7 +9058,8 @@ async function downloadTeprWithSigs(){
 
   try {
     showSync('⏳ Stahuji originál…');
-    var r = await fetch(k.pdfUrl);
+    var _teprUrl = await resolveFileUrl(k.pdfUrl);   // Storage cesta → token-URL (passthrough u http/data)
+    var r = await fetch(_teprUrl || k.pdfUrl);
     if(!r.ok) throw new Error('PDF nenalezeno: ' + k.pdfUrl);
     var bytes = await r.arrayBuffer();
 
@@ -9351,11 +9442,8 @@ function openKzpPdfInline(k){
     titleEl.textContent = ico + ' ' + t;
   }
   if(pdfView) pdfView.style.display = 'flex';
-  if(frame && typeof pdfFrameSrcFor === 'function') {
-    frame.src = pdfFrameSrcFor(k.pdfUrl);
-  } else if(frame) {
-    frame.src = k.pdfUrl;
-  }
+  // setPdfFrame přeloží cestu na Storage (getDownloadURL) i absolutní URL (passthrough)
+  if(frame) setPdfFrame(frame, k.pdfUrl);
   window._kzpPdfOpen = true;
 }
 
@@ -10362,8 +10450,10 @@ function copyDiaryExport(){
     <button id="kzp-download-btn" onclick="downloadTeprWithSigs()" title="Stáhnout finální PDF s podpisy" style="display:none;background:var(--green);color:#fff;">📥 Stáhnout</button>
     <button id="kzp-evidence-btn" onclick="openSignEvidence()" title="Evidence podpisů (přehled tabulka)" style="background:var(--panel2);color:var(--text2);font-size:13px;">📋 Evidence</button>
     <button id="kzp-cleanup-btn" onclick="cleanupOldKzp()" title="Vyčistit staré KZP záznamy" style="background:var(--panel2);color:var(--text2);font-size:13px;">🧹</button>
+    <button id="kzp-upload-btn" onclick="kzpUploadStart()" title="Nahrát TePř / KZP jako PDF (bez klíče, pod přihlášením)" style="background:var(--green);color:#fff;">📤 Nahrát PDF</button>
     <button id="kzp-add-btn" onclick="openKzpAddModal()" style="background:var(--accent);color:#fff;">+ Položka</button>
     <button onclick="closeKzpPanel()">✕</button>
+    <input type="file" id="kzp-file-input" accept="application/pdf" style="display:none" onchange="kzpUploadFilePicked(this)">
   </div>
   <div id="kzp-warning-banner" style="background:rgba(255,107,107,0.18);border-left:4px solid #ff6b6b;color:#ff8585;padding:10px 14px;font-size:13px;line-height:1.4;flex-shrink:0;">
     ⚠️ <b>POZOR — KZP nejsou schválena</b>. Hodnoty jsou z neschválené verze v01. Pro skutečné kontroly použij vždy aktuální schválený výtisk od TDS / objednatele.
@@ -10582,13 +10672,22 @@ function copyDiaryExport(){
 
 <div id="rozhlas-modal" onclick="if(event.target===this)closeRozhlas()">
   <div class="rz-card">
-    <div class="rz-top"><h3>📢 Rozhlas – co je nového</h3><button class="rz-x" onclick="closeRozhlas()">✕</button></div>
-    <div id="rz-compose" class="rz-compose" style="display:none;">
-      <input id="rz-title" type="text" maxlength="80" placeholder="Nadpis (nepovinný) – např. Uzavírka km 5,2">
-      <textarea id="rz-text" maxlength="1000" placeholder="Napiš oznámení pro celý tým…"></textarea>
-      <button class="rz-send" onclick="postRozhlas()">📢 Vyhlásit</button>
+    <div class="rz-top"><h3>📢 Rozhlas</h3><button class="rz-x" onclick="closeRozhlas()">✕</button></div>
+    <div class="rz-tabs">
+      <button id="rz-tab-novinky" class="rz-tab active" onclick="setRozhlasTab('novinky')">🆕 Co je nového</button>
+      <button id="rz-tab-rozhlas" class="rz-tab" onclick="setRozhlasTab('rozhlas')">📢 Rozhlas týmu</button>
     </div>
-    <div id="rz-list" class="rz-list"></div>
+    <div id="rz-pane-novinky">
+      <div id="rz-novinky" class="rz-list"></div>
+    </div>
+    <div id="rz-pane-rozhlas" style="display:none;">
+      <div id="rz-compose" class="rz-compose" style="display:none;">
+        <input id="rz-title" type="text" maxlength="80" placeholder="Nadpis (nepovinný) – např. Uzavírka km 5,2">
+        <textarea id="rz-text" maxlength="1000" placeholder="Napiš oznámení pro celý tým…"></textarea>
+        <button class="rz-send" onclick="postRozhlas()">📢 Vyhlásit</button>
+      </div>
+      <div id="rz-list" class="rz-list"></div>
+    </div>
   </div>
 </div>
 
@@ -10612,6 +10711,21 @@ function copyDiaryExport(){
           <li><b>🖼️ Galerie</b> – miniatury, změna hustoty mřížky (−/+), procházení <b>tažením</b> přes celou obrazovku.</li>
           <li><b>Hromadné mazání</b> v galerii – označíš víc fotek naráz (jen své; admin vše).</li>
           <li>Fotky se zobrazí i v mapě přes vrstvu <b>Fotky v mapě</b>.</li>
+        </ul>
+      </div>
+      <div class="hlp-sec">
+        <h4>🌐 360° procházka trasou</h4>
+        <ul>
+          <li>Zapni ve <b>☰ Vrstvy → 🌐 360° procházka</b> – na mapě fialová trasa s 🌐 body.</li>
+          <li>Klik na bod otevře <b>panorama</b>. Táhni prstem pro rozhlédnutí do všech stran.</li>
+          <li>Pohyb po trase: <b>nahoru = vpřed, dolů = zpět</b>. <b>⏫⏬</b> skočí rychle (o 4 fotky), <b>▲▼</b> po jedné.</li>
+        </ul>
+      </div>
+      <div class="hlp-sec">
+        <h4>📢 Rozhlas a co je nového</h4>
+        <ul>
+          <li><b>📢</b> nahoře – dvě záložky: <b>🆕 Co je nového</b> (novinky v aplikaci) a <b>📢 Rozhlas týmu</b> (oznámení).</li>
+          <li>Červená tečka = máš něco nepřečteného. Po otevření zmizí.</li>
         </ul>
       </div>
       <div class="hlp-sec">

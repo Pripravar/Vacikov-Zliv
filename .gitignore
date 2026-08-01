@@ -1,0 +1,9 @@
+# Servisní klíče Firebase (Admin SDK) – NIKDY do repa, je to master heslo projektu.
+*firebase-adminsdk*.json
+*-adminsdk-*.json
+serviceAccount*.json
+service-account*.json
+
+# Lokální / dočasné
+.DS_Store
+node_modules/
