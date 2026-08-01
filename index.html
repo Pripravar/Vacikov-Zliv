@@ -835,8 +835,12 @@ textarea.note-field { min-height:80px; resize:vertical; }
 #pano-viewer { position:absolute; inset:0; width:100%; height:100%; }
 #pano-info { position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:7010; background:rgba(0,0,0,.6); color:#fff; font-size:13px; font-weight:700; padding:6px 14px; border-radius:20px; pointer-events:none; }
 #pano-close { position:absolute; top:10px; right:12px; z-index:7010; background:rgba(0,0,0,.6); color:#fff; border:none; width:40px; height:40px; border-radius:50%; font-size:20px; cursor:pointer; }
-.pano-nav { position:absolute; top:50%; transform:translateY(-50%); z-index:7010; background:rgba(0,0,0,.55); color:#fff; border:none; width:52px; height:52px; border-radius:50%; font-size:30px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; }
-#pano-prev { left:14px; } #pano-next { right:14px; }
+.pano-navrow { position:absolute; left:50%; transform:translateX(-50%); z-index:7010; display:flex; gap:64px; }
+#pano-nav-fast { top:20%; }
+#pano-nav-slow { top:50%; transform:translate(-50%,-50%); }
+.pano-btn { background:rgba(0,0,0,.5); color:#fff; border:1px solid rgba(255,255,255,.28); width:56px; height:56px; border-radius:50%; font-size:32px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; -webkit-tap-highlight-color:transparent; }
+.pano-btn:active { background:rgba(142,36,170,.8); }
+.pano-fast { font-weight:700; }
 #pano-hint { position:absolute; bottom:16px; left:50%; transform:translateX(-50%); z-index:7010; background:rgba(0,0,0,.55); color:#fff; font-size:12px; padding:6px 12px; border-radius:16px; pointer-events:none; white-space:nowrap; }
 .pano-arrow-hs { color:#fff; font-size:34px; text-shadow:0 2px 6px rgba(0,0,0,.8); cursor:pointer; transform:translate(-50%,-50%); filter:drop-shadow(0 0 3px #8e24aa); }
 
@@ -3262,19 +3266,30 @@ function openPano360(id){
   var kmStr = (kmNum!=null && !isNaN(kmNum)) ? ('km '+fmtKm(kmNum)) : '';
   var info=document.getElementById('pano-info');
   if(info) info.textContent='🌐 '+kmStr+(rec.datum?(' · '+rec.datum):'');
-  // dostupnost soused. tlačítek
-  var prev=_panoNeighbor(id,-1), next=_panoNeighbor(id,+1);
-  var bp=document.getElementById('pano-prev'), bn=document.getElementById('pano-next');
-  if(bp) bp.style.visibility = prev?'visible':'hidden';
-  if(bn) bn.style.visibility = next?'visible':'hidden';
+  // pozice v řadě + viditelnost navigace (rychle ±4 / pomalu ±1, oba směry) + počítadlo
+  var _arr=_panoSorted(), _idx=-1;
+  for(var _j=0;_j<_arr.length;_j++){ if(_arr[_j].__id===id){ _idx=_j; break; } }
+  var atFirst=(_idx<=0), atLast=(_idx<0 || _idx>=_arr.length-1);
+  [['pano-fast-back',atFirst],['pano-prev',atFirst],['pano-fast-fwd',atLast],['pano-next',atLast]].forEach(function(p){
+    var el=document.getElementById(p[0]); if(el) el.style.visibility=p[1]?'hidden':'visible';
+  });
+  if(info && _idx>=0) info.textContent='🌐 '+kmStr+' · '+(_idx+1)+'/'+_arr.length+(rec.datum?(' · '+rec.datum):'');
   resolveFileUrl(rec.path).then(function(url){
     if(!url){ showToast('❌ Panorama se nenačetlo',2500); return; }
     if(window._panoViewer){ try{ window._panoViewer.destroy(); }catch(e){} window._panoViewer=null; }
+    // Šipky přímo v obraze (na silnici): dopředu = střed výchozího pohledu (PANO_INIT_YAW),
+    // dozadu = opačná strana. Nezávisí na uloženém azimutu → funguje i s neznámým natočením GoPro.
     var hotSpots=[];
-    if(next && rec.bearingNext!=null){
-      hotSpots.push({ pitch:-3, yaw:rec.bearingNext, cssClass:'pano-arrow-hs',
+    var _nextH=_panoJump(id,1), _prevH=_panoJump(id,-1);
+    if(_nextH){
+      hotSpots.push({ pitch:-12, yaw:PANO_INIT_YAW, cssClass:'pano-arrow-hs',
         createTooltipFunc:function(div){ div.innerHTML='▲'; },
-        clickHandlerFunc:function(){ openPano360(next.__id); } });
+        clickHandlerFunc:function(){ openPano360(_nextH.__id); } });
+    }
+    if(_prevH){
+      hotSpots.push({ pitch:-12, yaw:(PANO_INIT_YAW+180)%360, cssClass:'pano-arrow-hs pano-arrow-back',
+        createTooltipFunc:function(div){ div.innerHTML='▲'; },
+        clickHandlerFunc:function(){ openPano360(_prevH.__id); } });
     }
     try{
       window._panoViewer = pannellum.viewer('pano-viewer', {
@@ -3284,9 +3299,16 @@ function openPano360(id){
     }catch(e){ showToast('❌ Prohlížeč 360° selhal',2500); }
   });
 }
-function panoNav(dir){
+function _panoJump(id, delta){
+  var arr=_panoSorted(), i=-1;
+  for(var j=0;j<arr.length;j++){ if(arr[j].__id===id){ i=j; break; } }
+  if(i<0) return null;
+  var n=Math.max(0, Math.min(arr.length-1, i+delta));
+  return (n!==i) ? arr[n] : null;
+}
+function panoNav(delta){
   if(!window._panoCurId) return;
-  var nb=_panoNeighbor(window._panoCurId, dir);
+  var nb=_panoJump(window._panoCurId, delta);
   if(nb) openPano360(nb.__id);
 }
 function closePano360(){
@@ -3296,8 +3318,8 @@ function closePano360(){
 }
 document.addEventListener('keydown', function(e){
   if(!document.getElementById('pano-modal') || !document.getElementById('pano-modal').classList.contains('open')) return;
-  if(e.key==='ArrowRight') panoNav(1);
-  else if(e.key==='ArrowLeft') panoNav(-1);
+  if(e.key==='ArrowRight') panoNav(e.shiftKey?4:1);
+  else if(e.key==='ArrowLeft') panoNav(e.shiftKey?-4:-1);
   else if(e.key==='Escape') closePano360();
 });
 
@@ -10561,9 +10583,15 @@ function copyDiaryExport(){
   <div id="pano-viewer"></div>
   <div id="pano-info">🌐</div>
   <button id="pano-close" onclick="closePano360()" title="Zavřít">✕</button>
-  <button id="pano-prev" class="pano-nav" onclick="panoNav(-1)" title="Předchozí">‹</button>
-  <button id="pano-next" class="pano-nav" onclick="panoNav(1)" title="Další">›</button>
-  <div id="pano-hint">🌐 Táhni pro rozhlédnutí · ‹ › nebo ▲ pro pohyb po trase</div>
+  <div id="pano-nav-fast" class="pano-navrow">
+    <button id="pano-fast-back" class="pano-btn pano-fast" onclick="panoNav(-4)" title="Rychle zpět (−4)">«</button>
+    <button id="pano-fast-fwd"  class="pano-btn pano-fast" onclick="panoNav(4)"  title="Rychle vpřed (+4)">»</button>
+  </div>
+  <div id="pano-nav-slow" class="pano-navrow">
+    <button id="pano-prev" class="pano-btn" onclick="panoNav(-1)" title="Zpět (−1)">‹</button>
+    <button id="pano-next" class="pano-btn" onclick="panoNav(1)"  title="Vpřed (+1)">›</button>
+  </div>
+  <div id="pano-hint">🌐 Táhni pro rozhled · nahoře «» rychle (±4), uprostřed ‹› po jedné · ▲ v obraze = po silnici</div>
 </div>
 
 <div id="rozhlas-modal" onclick="if(event.target===this)closeRozhlas()">
