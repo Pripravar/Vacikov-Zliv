@@ -835,12 +835,13 @@ textarea.note-field { min-height:80px; resize:vertical; }
 #pano-viewer { position:absolute; inset:0; width:100%; height:100%; }
 #pano-info { position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:7010; background:rgba(0,0,0,.6); color:#fff; font-size:13px; font-weight:700; padding:6px 14px; border-radius:20px; pointer-events:none; }
 #pano-close { position:absolute; top:10px; right:12px; z-index:7010; background:rgba(0,0,0,.6); color:#fff; border:none; width:40px; height:40px; border-radius:50%; font-size:20px; cursor:pointer; }
-.pano-navrow { position:absolute; left:50%; transform:translateX(-50%); z-index:7010; display:flex; gap:64px; }
-#pano-nav-fast { top:20%; }
-#pano-nav-slow { top:50%; transform:translate(-50%,-50%); }
-.pano-btn { background:rgba(0,0,0,.5); color:#fff; border:1px solid rgba(255,255,255,.28); width:56px; height:56px; border-radius:50%; font-size:32px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; -webkit-tap-highlight-color:transparent; }
+.pano-btn { position:absolute; left:50%; transform:translateX(-50%); z-index:7010; background:rgba(0,0,0,.5); color:#fff; border:1px solid rgba(255,255,255,.28); width:58px; height:58px; border-radius:50%; font-size:28px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; -webkit-tap-highlight-color:transparent; }
 .pano-btn:active { background:rgba(142,36,170,.8); }
-.pano-fast { font-weight:700; }
+.pano-fast { font-size:30px; }
+#pano-fast-fwd  { top:7%; }
+#pano-next      { top:23%; }
+#pano-prev      { bottom:23%; }
+#pano-fast-back { bottom:7%; }
 #pano-hint { position:absolute; bottom:16px; left:50%; transform:translateX(-50%); z-index:7010; background:rgba(0,0,0,.55); color:#fff; font-size:12px; padding:6px 12px; border-radius:16px; pointer-events:none; white-space:nowrap; }
 .pano-arrow-hs { color:#fff; font-size:34px; text-shadow:0 2px 6px rgba(0,0,0,.8); cursor:pointer; transform:translate(-50%,-50%); filter:drop-shadow(0 0 3px #8e24aa); }
 
@@ -3277,20 +3278,9 @@ function openPano360(id){
   resolveFileUrl(rec.path).then(function(url){
     if(!url){ showToast('❌ Panorama se nenačetlo',2500); return; }
     if(window._panoViewer){ try{ window._panoViewer.destroy(); }catch(e){} window._panoViewer=null; }
-    // Šipky přímo v obraze (na silnici): dopředu = střed výchozího pohledu (PANO_INIT_YAW),
-    // dozadu = opačná strana. Nezávisí na uloženém azimutu → funguje i s neznámým natočením GoPro.
+    // Šipky přímo v obraze (hotspoty) záměrně NEpoužíváme – u 360° matly (vpravo≠dopředu).
+    // Navigace jen přes svislá tlačítka ⏫▲ (vpřed nahoru) / ▼⏬ (zpět dolů).
     var hotSpots=[];
-    var _nextH=_panoJump(id,1), _prevH=_panoJump(id,-1);
-    if(_nextH){
-      hotSpots.push({ pitch:-12, yaw:PANO_INIT_YAW, cssClass:'pano-arrow-hs',
-        createTooltipFunc:function(div){ div.innerHTML='▲'; },
-        clickHandlerFunc:function(){ openPano360(_nextH.__id); } });
-    }
-    if(_prevH){
-      hotSpots.push({ pitch:-12, yaw:(PANO_INIT_YAW+180)%360, cssClass:'pano-arrow-hs pano-arrow-back',
-        createTooltipFunc:function(div){ div.innerHTML='▲'; },
-        clickHandlerFunc:function(){ openPano360(_prevH.__id); } });
-    }
     try{
       window._panoViewer = pannellum.viewer('pano-viewer', {
         type:'equirectangular', panorama:url, autoLoad:true, showControls:false,
@@ -10583,15 +10573,11 @@ function copyDiaryExport(){
   <div id="pano-viewer"></div>
   <div id="pano-info">🌐</div>
   <button id="pano-close" onclick="closePano360()" title="Zavřít">✕</button>
-  <div id="pano-nav-fast" class="pano-navrow">
-    <button id="pano-fast-back" class="pano-btn pano-fast" onclick="panoNav(-4)" title="Rychle zpět (−4)">«</button>
-    <button id="pano-fast-fwd"  class="pano-btn pano-fast" onclick="panoNav(4)"  title="Rychle vpřed (+4)">»</button>
-  </div>
-  <div id="pano-nav-slow" class="pano-navrow">
-    <button id="pano-prev" class="pano-btn" onclick="panoNav(-1)" title="Zpět (−1)">‹</button>
-    <button id="pano-next" class="pano-btn" onclick="panoNav(1)"  title="Vpřed (+1)">›</button>
-  </div>
-  <div id="pano-hint">🌐 Táhni pro rozhled · nahoře «» rychle (±4), uprostřed ‹› po jedné · ▲ v obraze = po silnici</div>
+  <button id="pano-fast-fwd"  class="pano-btn pano-fast" onclick="panoNav(4)"  title="Rychle vpřed (+4 fotky)">⏫</button>
+  <button id="pano-next"      class="pano-btn"           onclick="panoNav(1)"  title="Vpřed (+1)">▲</button>
+  <button id="pano-prev"      class="pano-btn"           onclick="panoNav(-1)" title="Zpět (−1)">▼</button>
+  <button id="pano-fast-back" class="pano-btn pano-fast" onclick="panoNav(-4)" title="Rychle zpět (−4 fotky)">⏬</button>
+  <div id="pano-hint">🌐 Táhni pro rozhled · nahoru = vpřed po trase, dolů = zpět · ⏫⏬ rychle (±4), ▲▼ po jedné</div>
 </div>
 
 <div id="rozhlas-modal" onclick="if(event.target===this)closeRozhlas()">
