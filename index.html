@@ -1574,15 +1574,10 @@ var GPX_POINTS = [
   [49.540280,13.843404],
   [49.540320,13.842975],
   [49.540424,13.842513],
-  [49.540535,13.842256],
-  [49.540756,13.841655],
-  [49.541172,13.840845],
-  [49.541290,13.840577],
-  [49.541410,13.840421],
-  [49.541508,13.840324],
-  [49.541718,13.840116],
-  [49.542324,13.839805]
+  [49.540498,13.842343]
 ];
+// ⬆ Osa oříznuta na KONEC street-view procházky (= skutečný KÚ km 8,450). Dřív pokračovala
+//   ještě ~284 m dál (k bodu 49.542324,13.839805), což posouvalo staničení – viz Tomáš 2026-08.
 
 // ── KALIBRACE: páry (GPS, km) z 'gps vs km.gpx' ──
 // Pozn.: ZU 0,000 a KU 4,600 leží mimo GPX trasu (581m / 335m od krajů GPX),
@@ -1592,7 +1587,7 @@ var GPX_POINTS = [
 // ⚠️ Neměnit bez testu na telefonu — řídí staničení v celé aplikaci. Viz datova-pole.md §3.
 var CALIB_POINTS = [
   {lat:49.543552, lng:13.908110, km:3.400},  // ZÚ — konec nového povrchu za Vacíkovem
-  {lat:49.542324, lng:13.839805, km:8.450},  // KÚ — odbočka na Zliv
+  {lat:49.540498, lng:13.842343, km:8.450},  // KÚ — konec street-view procházky (skutečný konec stavby; dřív 49.542324,13.839805 = o ~284 m dál)
 ];
 
 // ── DOKUMENTY podle km ─────────────────────────────────
@@ -3259,7 +3254,9 @@ function openPano360(id){
   if(!rec){ return; }
   window._panoCurId=id;
   document.getElementById('pano-modal').classList.add('open');
-  var kmStr = (rec.km!=null) ? ('km '+fmtKm(rec.km)) : '';
+  // km počítej živě z GPS (drží se aktuální kalibrace osy, ne uložené staré hodnoty v DB)
+  var kmNum = (typeof rec.lat==='number' && typeof rec.lng==='number' && typeof gpsToKm==='function') ? gpsToKm(rec.lat, rec.lng) : rec.km;
+  var kmStr = (kmNum!=null && !isNaN(kmNum)) ? ('km '+fmtKm(kmNum)) : '';
   var info=document.getElementById('pano-info');
   if(info) info.textContent='🌐 '+kmStr+(rec.datum?(' · '+rec.datum):'');
   // dostupnost soused. tlačítek
