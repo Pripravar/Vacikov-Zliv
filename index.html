@@ -33,6 +33,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <!-- piexifjs pro zápis EXIF data pořízení do fotek (aby je iOS Photos zařadil podle data pořízení, ne podle data stažení) -->
 <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.6/piexif.min.js"></script>
+<!-- Pannellum: prohlížeč 360° panoramat (procházka trasou / street view) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css">
+<script src="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 :root {
@@ -826,6 +829,17 @@ textarea.note-field { min-height:80px; resize:vertical; }
 .hlp-sec li b { color:var(--text); }
 .hlp-tip { background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-size:13px; color:var(--text2); margin-top:12px; }
 
+/* ── 360° prohlížeč (Pannellum) ── */
+#pano-modal { display:none; position:fixed; inset:0; z-index:7000; background:#000; }
+#pano-modal.open { display:block; }
+#pano-viewer { position:absolute; inset:0; width:100%; height:100%; }
+#pano-info { position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:7010; background:rgba(0,0,0,.6); color:#fff; font-size:13px; font-weight:700; padding:6px 14px; border-radius:20px; pointer-events:none; }
+#pano-close { position:absolute; top:10px; right:12px; z-index:7010; background:rgba(0,0,0,.6); color:#fff; border:none; width:40px; height:40px; border-radius:50%; font-size:20px; cursor:pointer; }
+.pano-nav { position:absolute; top:50%; transform:translateY(-50%); z-index:7010; background:rgba(0,0,0,.55); color:#fff; border:none; width:52px; height:52px; border-radius:50%; font-size:30px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+#pano-prev { left:14px; } #pano-next { right:14px; }
+#pano-hint { position:absolute; bottom:16px; left:50%; transform:translateX(-50%); z-index:7010; background:rgba(0,0,0,.55); color:#fff; font-size:12px; padding:6px 12px; border-radius:16px; pointer-events:none; white-space:nowrap; }
+.pano-arrow-hs { color:#fff; font-size:34px; text-shadow:0 2px 6px rgba(0,0,0,.8); cursor:pointer; transform:translate(-50%,-50%); filter:drop-shadow(0 0 3px #8e24aa); }
+
 /* Panel úkolů – posuvný shora */
 #tasks-panel { position:fixed; top:0; left:0; right:0; bottom:0; z-index:3500; background:var(--bg); display:none; flex-direction:column; }
 #tasks-panel.open { display:flex; }
@@ -1242,6 +1256,10 @@ document.addEventListener('touchend', function(e){
     <label>📷 Fotky v mapě</label>
     <label class="toggle"><input type="checkbox" id="lyr-fotomapa" onchange="setFotoMapaVisible(this.checked)"><span class="toggle-slider"></span></label>
   </div>
+  <div class="layer-row" data-perm="pano">
+    <label>🌐 360° procházka</label>
+    <label class="toggle"><input type="checkbox" id="lyr-pano" onchange="setPanoVisible(this.checked)"><span class="toggle-slider"></span></label>
+  </div>
   <h3>📷 Fotky</h3>
   <div class="layer-row">
     <label>🏷️ Razítko (km, datum, jméno)</label>
@@ -1625,7 +1643,7 @@ var gpsActive = false;
 var gpsCentering = false;
 var gpxCumulative = [];
 var calibSorted = null;
-var layerGroups = {trasa:null, st100:null, st20:null, pr:null, propustky:null, prikopy:null, etapy:null, etapa1:null, etapa2:null, etapa3:null, etapa4:null, so:null, so101_1:null, so101_2:null, so101_3:null, sanace:null, notes:null, notes0:null, notes1:null, notes2:null, notes3:null, notes4:null, notes5:null, notes6:null, mereni:null, fotomapa:null};
+var layerGroups = {trasa:null, st100:null, st20:null, pr:null, propustky:null, prikopy:null, etapy:null, etapa1:null, etapa2:null, etapa3:null, etapa4:null, so:null, so101_1:null, so101_2:null, so101_3:null, sanace:null, notes:null, notes0:null, notes1:null, notes2:null, notes3:null, notes4:null, notes5:null, notes6:null, mereni:null, fotomapa:null, pano:null};
 
 // ── MATH ──────────────────────────────
 function haversine(lat1,lon1,lat2,lon2) {
@@ -3183,6 +3201,105 @@ function setFotoMapaVisible(on){
   if(on){ renderFotoMapa(); layerGroups.fotomapa.addTo(map); }
   else { map.removeLayer(layerGroups.fotomapa); }
 }
+
+// ── 360° procházka trasou (Pannellum) ────────────────────────────────
+window.pano360Data = {};
+function loadPanorama360(){
+  if(!db) return;
+  db.ref('panorama_360').on('value', function(snap){
+    window.pano360Data = snap.val() || {};
+    var cb=document.getElementById('lyr-pano');
+    if(cb && cb.checked && hasPerm('pano')) renderPano360Markers();
+  });
+}
+// pole seřazené podle 'order'
+function _panoSorted(){
+  var d=window.pano360Data||{};
+  return Object.keys(d).map(function(k){ var o=Object.assign({},d[k]); o.__id=k; return o; })
+    .sort(function(a,b){ return (a.order||0)-(b.order||0); });
+}
+function _panoNeighbor(id, dir){
+  var arr=_panoSorted(), i=-1;
+  for(var j=0;j<arr.length;j++){ if(arr[j].__id===id){ i=j; break; } }
+  if(i<0) return null;
+  var n=i+dir;
+  return (n>=0 && n<arr.length) ? arr[n] : null;
+}
+function renderPano360Markers(){
+  if(!hasPerm('pano')) return;
+  if(!layerGroups.pano) layerGroups.pano=L.layerGroup();
+  layerGroups.pano.clearLayers();
+  var arr=_panoSorted();
+  if(!arr.length) return;
+  // fialová spojnice procházky
+  var pts=arr.filter(function(o){ return typeof o.lat==='number' && typeof o.lng==='number'; }).map(function(o){ return [o.lat,o.lng]; });
+  if(pts.length>1) L.polyline(pts,{color:'#8e24aa',weight:3,opacity:0.85,interactive:false}).addTo(layerGroups.pano);
+  arr.forEach(function(o){
+    if(typeof o.lat!=='number' || typeof o.lng!=='number') return;
+    var icon=L.divIcon({className:'',iconAnchor:[13,13],html:'<div style="width:26px;height:26px;border-radius:50%;background:#8e24aa;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-size:13px;">🌐</div>'});
+    var mk=L.marker([o.lat,o.lng],{icon:icon});
+    (function(id){ mk.on('click',function(){ openPano360(id); }); })(o.__id);
+    mk.addTo(layerGroups.pano);
+  });
+}
+function setPanoVisible(on){
+  var cb=document.getElementById('lyr-pano');
+  if(on && !hasPerm('pano')){ if(cb) cb.checked=false; showToast('🔒 360° procházku ti administrátor nepovolil', 2800); return; }
+  if(!layerGroups.pano) layerGroups.pano=L.layerGroup();
+  if(on){ renderPano360Markers(); layerGroups.pano.addTo(map); }
+  else { map.removeLayer(layerGroups.pano); }
+}
+
+// Prohlížeč jednoho panoramatu (fullscreen Pannellum) + navigace po trase
+window._panoViewer = null;
+window._panoCurId = null;
+function openPano360(id){
+  if(!hasPerm('pano')){ _permDenied(); return; }
+  var rec=(window.pano360Data||{})[id];
+  if(!rec){ return; }
+  window._panoCurId=id;
+  document.getElementById('pano-modal').classList.add('open');
+  var kmStr = (rec.km!=null) ? ('km '+fmtKm(rec.km)) : '';
+  var info=document.getElementById('pano-info');
+  if(info) info.textContent='🌐 '+kmStr+(rec.datum?(' · '+rec.datum):'');
+  // dostupnost soused. tlačítek
+  var prev=_panoNeighbor(id,-1), next=_panoNeighbor(id,+1);
+  var bp=document.getElementById('pano-prev'), bn=document.getElementById('pano-next');
+  if(bp) bp.style.visibility = prev?'visible':'hidden';
+  if(bn) bn.style.visibility = next?'visible':'hidden';
+  resolveFileUrl(rec.path).then(function(url){
+    if(!url){ showToast('❌ Panorama se nenačetlo',2500); return; }
+    if(window._panoViewer){ try{ window._panoViewer.destroy(); }catch(e){} window._panoViewer=null; }
+    var hotSpots=[];
+    if(next && rec.bearingNext!=null){
+      hotSpots.push({ pitch:-3, yaw:rec.bearingNext, cssClass:'pano-arrow-hs',
+        createTooltipFunc:function(div){ div.innerHTML='▲'; },
+        clickHandlerFunc:function(){ openPano360(next.__id); } });
+    }
+    try{
+      window._panoViewer = pannellum.viewer('pano-viewer', {
+        type:'equirectangular', panorama:url, autoLoad:true, showControls:false,
+        hfov:110, minHfov:50, maxHfov:120, crossOrigin:'anonymous', hotSpots:hotSpots
+      });
+    }catch(e){ showToast('❌ Prohlížeč 360° selhal',2500); }
+  });
+}
+function panoNav(dir){
+  if(!window._panoCurId) return;
+  var nb=_panoNeighbor(window._panoCurId, dir);
+  if(nb) openPano360(nb.__id);
+}
+function closePano360(){
+  document.getElementById('pano-modal').classList.remove('open');
+  if(window._panoViewer){ try{ window._panoViewer.destroy(); }catch(e){} window._panoViewer=null; }
+  window._panoCurId=null;
+}
+document.addEventListener('keydown', function(e){
+  if(!document.getElementById('pano-modal') || !document.getElementById('pano-modal').classList.contains('open')) return;
+  if(e.key==='ArrowRight') panoNav(1);
+  else if(e.key==='ArrowLeft') panoNav(-1);
+  else if(e.key==='Escape') closePano360();
+});
 
 function lpChoose(kind) {
   document.getElementById('lp-chooser').classList.remove('open');
@@ -5727,6 +5844,7 @@ var FEATURES = [
   {key:'vykresy',   label:'Nahrávání výkresů / PDF',   btns:['btn-pdf-addvk']},
   {key:'mereni',    label:'Měření na mapě',            btns:['btn-measure','btn-mereni-evidence']},
   {key:'fotomapa',  label:'🗺️ Vrstva: Fotky v mapě',    btns:[]},
+  {key:'pano',      label:'🗺️ Vrstva: 360° procházka trasou', btns:[]},
   {key:'galerie',   label:'Galerie fotek',             btns:['btn-gallery']},
   {key:'pripominky',label:'Poznámky a úkoly na mapě',  btns:['btn-notes-evidence','btn-place']},
   {key:'ukoly',     label:'Úkolníček',                 btns:['btn-tasks']},
@@ -6123,6 +6241,7 @@ function completeLogin(user, nameOverride) {
   loadVykresy();
   loadMereni();
   loadStandalonePhotos();
+  loadPanorama360();
   loadPracovnici();
   loadStroje();
   setupFcmIfPossible();
@@ -10436,6 +10555,15 @@ function copyDiaryExport(){
       <button class="ua-btn" onclick="closeUserAdmin()">Zavřít</button>
     </div>
   </div>
+</div>
+
+<div id="pano-modal">
+  <div id="pano-viewer"></div>
+  <div id="pano-info">🌐</div>
+  <button id="pano-close" onclick="closePano360()" title="Zavřít">✕</button>
+  <button id="pano-prev" class="pano-nav" onclick="panoNav(-1)" title="Předchozí">‹</button>
+  <button id="pano-next" class="pano-nav" onclick="panoNav(1)" title="Další">›</button>
+  <div id="pano-hint">🌐 Táhni pro rozhlédnutí · ‹ › nebo ▲ pro pohyb po trase</div>
 </div>
 
 <div id="rozhlas-modal" onclick="if(event.target===this)closeRozhlas()">
