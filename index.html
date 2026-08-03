@@ -1166,6 +1166,7 @@ document.addEventListener('touchend', function(e){
   <button id="btn-denik" onclick="openDiaryPanel()" title="Deník stavby" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;">📓</button>
   <button id="btn-kzp"   onclick="openKzpPanel()"   title="Kvalita / KZP"   style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;">🧪</button>
   <button id="btn-standalone-foto" onclick="takeStandalonePhoto()" title="Vyfotit" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;">📷</button>
+  <button id="btn-import-foto" onclick="importFotoStart()" title="Nahrát fotky z galerie telefonu" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;">📥</button>
   <button id="btn-gallery" onclick="openGallery()" title="Fotogalerie" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;">🖼️</button>
   <button id="btn-mereni-evidence" onclick="openMereniEvidence()" title="Evidence měření" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;">📐</button>
   <button id="btn-notes-evidence" onclick="openNotesEvidence()" title="Evidence poznámek" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;">📝</button>
@@ -5368,6 +5369,58 @@ function takeStandalonePhoto() {
   document.getElementById('standalone-photo-input').click();
 }
 
+// ── Import fotek z galerie telefonu (bez focení) ─────────────────────
+function importFotoStart(){
+  if(!_perm('foto')) return;
+  if(!(fbAuth&&fbAuth.currentUser)){ showToast('❌ Přihlas se pro nahrání', 2500); return; }
+  var inp=document.getElementById('lib-photo-input'); if(inp){ inp.value=''; inp.click(); }
+}
+// GPS z EXIF fotky (piexif) → {lat,lng} nebo null
+function _exifGps(jpegDataUrl){
+  try{
+    if(typeof piexif==='undefined') return null;
+    var ex = piexif.load(jpegDataUrl);
+    var g = ex["GPS"]; if(!g) return null;
+    var la = g[piexif.GPSIFD.GPSLatitude], laR = g[piexif.GPSIFD.GPSLatitudeRef];
+    var lo = g[piexif.GPSIFD.GPSLongitude], loR = g[piexif.GPSIFD.GPSLongitudeRef];
+    if(!la || !lo) return null;
+    function dms(v){ return v[0][0]/v[0][1] + (v[1][0]/v[1][1])/60 + (v[2][0]/v[2][1])/3600; }
+    var lat = dms(la) * ((laR==='S'||laR==='s')?-1:1);
+    var lng = dms(lo) * ((loR==='W'||loR==='w')?-1:1);
+    if(!isFinite(lat) || !isFinite(lng)) return null;
+    return {lat:lat, lng:lng};
+  }catch(e){ return null; }
+}
+function importFotoPicked(input){
+  var files = input.files ? Array.prototype.slice.call(input.files) : [];
+  if(!files.length) return;
+  if(!fbStorage || !(fbAuth&&fbAuth.currentUser)){ showToast('❌ Přihlas se pro nahrání', 2500); return; }
+  var author = (window.currentUser && window.currentUser.name) || localStorage.getItem('noteAuthor') || '';
+  var enq = 0, skip = 0, pending = files.length;
+  showToast('📥 Importuji '+files.length+' '+(files.length===1?'fotku':'fotek')+'…', 2500);
+  files.forEach(function(file){
+    if(!/^image\//.test(file.type) && !/\.(jpe?g|png|heic)$/i.test(file.name)){ skip++; pending--; return; }
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      var orig = ev.target.result;
+      // 1) GPS: nejdřív z EXIF fotky, jinak aktuální poloha (pokud je GPS zapnuté)
+      var lat=null, lng=null, km=null;
+      var gps = _exifGps(orig);
+      if(gps){ lat=gps.lat; lng=gps.lng; }
+      else if(gpsActive && gpsMarker){ var ll=gpsMarker.getLatLng(); lat=ll.lat; lng=ll.lng; }
+      if(lat!=null){ try{ km = fmtKm(gpxCumToRealKm(nearestOnRoute(lat,lng).cum)); }catch(e){} }
+      // 2) komprese + zařazení do fronty na pozadí (stejná cesta jako focení)
+      compressImage(orig, function(compressed){
+        enqueuePhoto({ compressed: compressed, meta: {km:km, author:author, lat:lat, lng:lng, so:''}, yes:true });
+        enq++; pending--;
+        if(pending<=0) showToast('📥 Zařazeno '+enq+' fotek do nahrávání'+(skip?(' ('+skip+' přeskočeno)'):''), 2800);
+      });
+    };
+    reader.onerror = function(){ skip++; pending--; };
+    reader.readAsDataURL(file);
+  });
+}
+
 function _showStampPrompt() {
   document.getElementById('pp-title').innerHTML = '🏷️ Razítkovat tuto fotku?<br><span style="font-size:11px;font-weight:400;color:var(--text2);">(km + datum + jméno)</span>';
   document.getElementById('pp-yes').textContent = '✓ Ano, razítkovat';
@@ -5861,7 +5914,7 @@ window.allUsers    = {};       // {uid: {uid,name,email,photo,fcmToken,lastSeen}
 var ADMIN_EMAILS = ['arasid33@gmail.com'];   // bootstrap admin (koordinátor) – je admin hned po přihlášení
 var FEATURES = [
   {key:'pdf',       label:'Prohlížení výkresů / PD (PDF)', btns:[]},
-  {key:'foto',      label:'Focení',                    btns:['btn-standalone-foto']},
+  {key:'foto',      label:'Focení',                    btns:['btn-standalone-foto','btn-import-foto']},
   {key:'vykresy',   label:'Nahrávání výkresů / PDF',   btns:['btn-pdf-addvk']},
   {key:'mereni',    label:'Měření na mapě',            btns:['btn-measure','btn-mereni-evidence']},
   {key:'fotomapa',  label:'🗺️ Vrstva: Fotky v mapě',    btns:[]},
@@ -6090,6 +6143,7 @@ function closeStats(){ document.getElementById('stats-modal').classList.remove('
 // ── „Co je nového" — changelog aplikace (udržuje vývojář, nejnovější nahoře) ──
 // PRAVIDLO: s každou novou funkcí přidej řádek sem (datum YYYY-MM-DD) + aktualizuj Nápovědu.
 var APP_NOVINKY = [
+  {datum:'2026-08-01', verze:'foto', text:'📥 Import fotek z galerie telefonu – tlačítko 📥 nahoře. Vybereš víc fotek naráz, staničení (km) se vezme z GPS ve fotce (nebo z aktuální polohy), nahrání běží na pozadí.'},
   {datum:'2026-08-01', verze:'kvalita', text:'🧪 Kvalita: nahrání TePř a KZP přímo z aplikace (📤 Nahrát PDF) – TePř jde i podepsat (✍️). Dokumenty jsou soukromé (Storage, jen pro přihlášené).'},
   {datum:'2026-08-01', verze:'360°', text:'🌐 360° procházka trasou (Street View) – nová vrstva „360° procházka" ve Vrstvách. Klik na 🌐 bod otevře panorama; nahoru = vpřed po trase, dolů = zpět (⏫⏬ rychle o 4, ▲▼ po jedné).'},
   {datum:'2026-08-01', verze:'foto', text:'📷 Plynulé focení – po vyfocení hned fotíš dál, nahrávání běží na pozadí (odznak „⏳ Nahrávám…"). Nemusíš čekat mezi snímky.'},
@@ -9789,6 +9843,7 @@ function copyDiaryExport(){
 
 <!-- Standalone foto input -->
 <input type="file" id="standalone-photo-input" accept="image/*" capture="environment" style="display:none">
+<input type="file" id="lib-photo-input" accept="image/*" multiple style="display:none" onchange="importFotoPicked(this)">
 
 <!-- Fotogalerie modal -->
 <div id="gallery-modal">
@@ -10708,6 +10763,7 @@ function copyDiaryExport(){
         <h4>📷 Focení a galerie</h4>
         <ul>
           <li><b>📷</b> vyfotí a nahraje fotku (uloží se s časem, autorem a GPS).</li>
+          <li><b>📥</b> nahraje fotky <b>z galerie telefonu</b> (víc naráz) – km se vezme z GPS ve fotce nebo z tvé polohy.</li>
           <li><b>🖼️ Galerie</b> – miniatury, změna hustoty mřížky (−/+), procházení <b>tažením</b> přes celou obrazovku.</li>
           <li><b>Hromadné mazání</b> v galerii – označíš víc fotek naráz (jen své; admin vše).</li>
           <li>Fotky se zobrazí i v mapě přes vrstvu <b>Fotky v mapě</b>.</li>
