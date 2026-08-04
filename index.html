@@ -2037,7 +2037,7 @@ function addVykresFilePicked(input){
           author:(window.currentUser&&window.currentUser.name)||'', ts:t
         });
       })
-      .then(function(){ hideSync(); showToast('✅ Výkres nahrán', 2000); })
+      .then(function(){ logActivity('📄','nahrál výkres/PDF „'+(nazev||file.name)+'"'); hideSync(); showToast('✅ Výkres nahrán', 2000); })
       .catch(function(err){ hideSync(); console.error('uploadVykres:', err); showToast('❌ Nahrání selhalo: '+((err&&err.code)||''), 4000); });
   };
   reader.onerror=function(){ hideSync(); showToast('❌ Nepodařilo se načíst soubor', 2500); };
@@ -3124,7 +3124,7 @@ function confirmMeasureSave(){
     delkaM:_measureLenM(measurePts, closed), plochaM2: measureType==='plocha'?_measureAreaM2(measurePts):0,
     ownerUid:(window.currentUser&&window.currentUser.uid)||null,
     author:(window.currentUser&&window.currentUser.name)||'', ts:Date.now() };
-  db.ref('mereni').push(entry).then(function(){ closeMeasureSave(); stopMeasure(); showToast('✅ Měření uloženo',2000); });
+  db.ref('mereni').push(entry).then(function(){ logActivity('📐','uložil měření'+(entry.nazev?(' „'+entry.nazev+'"'):'')); closeMeasureSave(); stopMeasure(); showToast('✅ Měření uloženo',2000); });
 }
 function loadMereni(){
   db.ref('mereni').on('value', function(snap){
@@ -3578,6 +3578,7 @@ function saveNote() {
       author:author, nazev:nazev, text:text,
       photos:keepUrls.concat(uploadedUrls), time:new Date().toLocaleString('cs-CZ') };
     saveNote_toFirebase(note, null);
+    logActivity('📝','přidal poznámku'+(nazev?(' „'+nazev+'"'):''));
   }
   // Razítko: jen pokud uživatel zaškrtl toggle (a uložíme preferenci pro příště)
   var stampToggle = document.getElementById('note-stamp-toggle');
@@ -5632,6 +5633,7 @@ function _uploadPhotoJob(job, done){
             db.ref('standalone_photos/' + key).set(entry)
               .then(function(){
                 if(!url2) showToast('⚠ Druhá verze fotky se nenahrála', 2500);
+                try{ if(Date.now() - (window._lastFotoActTs||0) > 90000){ window._lastFotoActTs=Date.now(); logActivity('📷','přidal fotky'); } }catch(e){}
                 done(true);
               })
               .catch(function(){ showToast('❌ Chyba uložení fotky do DB', 2500); done(false); });
@@ -6211,6 +6213,7 @@ function closeStats(){ document.getElementById('stats-modal').classList.remove('
 // ── „Co je nového" — changelog aplikace (udržuje vývojář, nejnovější nahoře) ──
 // PRAVIDLO: s každou novou funkcí přidej řádek sem (datum YYYY-MM-DD) + aktualizuj Nápovědu.
 var APP_NOVINKY = [
+  {datum:'2026-08-01', verze:'aktivita', text:'📋 Feed aktivity „co se děje" – v 📢 nahoře nová záložka „Aktivita": chronologicky kdo co udělal (fotky, úkoly, poznámky, měření, výkresy, KZP). Červená tečka = nové akce ostatních.'},
   {datum:'2026-08-01', verze:'foto', text:'📥 Import fotek z galerie telefonu – v Galerii tlačítko „📥 Import z telefonu". Vybereš víc fotek naráz, km se vezme z GPS ve fotce (nebo tvé polohy), nahrání běží na pozadí. Objekt/úsek i km jde u fotky změnit ve fullscreenu (🏗️ / 📍).'},
   {datum:'2026-08-01', verze:'kvalita', text:'🧪 Kvalita: nahrání TePř a KZP přímo z aplikace (📤 Nahrát PDF) – TePř jde i podepsat (✍️). Dokumenty jsou soukromé (Storage, jen pro přihlášené).'},
   {datum:'2026-08-01', verze:'360°', text:'🌐 360° procházka trasou (Street View) – nová vrstva „360° procházka" ve Vrstvách. Klik na 🌐 bod otevře panorama; nahoru = vpřed po trase, dolů = zpět (⏫⏬ rychle o 4, ▲▼ po jedné).'},
@@ -6244,16 +6247,16 @@ function updateRozhlasBadge(){
   if(!badge) return;
   var last = _rozhlasRead();
   var nRoz = _rozhlasSorted().filter(function(o){ return (o.ts||0) > last; }).length;
-  var n = nRoz + _novinkyUnread();
+  var n = nRoz + _novinkyUnread() + _activityUnread();
   badge.textContent = n > 99 ? '99+' : n;
   badge.classList.toggle('show', n > 0);
 }
 function setRozhlasTab(tab){
-  var isNov = (tab === 'novinky');
-  document.getElementById('rz-tab-novinky').classList.toggle('active', isNov);
-  document.getElementById('rz-tab-rozhlas').classList.toggle('active', !isNov);
-  document.getElementById('rz-pane-novinky').style.display = isNov ? '' : 'none';
-  document.getElementById('rz-pane-rozhlas').style.display = isNov ? 'none' : '';
+  ['novinky','aktivita','rozhlas'].forEach(function(t){
+    var tb=document.getElementById('rz-tab-'+t), pn=document.getElementById('rz-pane-'+t);
+    if(tb) tb.classList.toggle('active', t===tab);
+    if(pn) pn.style.display = (t===tab) ? '' : 'none';
+  });
 }
 function renderNovinky(){
   var box = document.getElementById('rz-novinky');
@@ -6271,18 +6274,64 @@ function renderNovinky(){
 function openRozhlas(){
   document.getElementById('rz-compose').style.display = isAdmin() ? '' : 'none';
   document.getElementById('rozhlas-modal').classList.add('show');
-  // otevři na záložce, kde je něco nepřečteného (přednost novinky)
-  setRozhlasTab(_novinkyUnread() > 0 ? 'novinky' : (_rozhlasSorted().filter(function(o){return (o.ts||0)>_rozhlasRead();}).length ? 'rozhlas' : 'novinky'));
+  // otevři na záložce, kde je něco nepřečteného (novinky → aktivita → rozhlas)
+  var tab = _novinkyUnread()>0 ? 'novinky'
+          : (_activityUnread()>0 ? 'aktivita'
+          : (_rozhlasSorted().filter(function(o){return (o.ts||0)>_rozhlasRead();}).length ? 'rozhlas' : 'novinky'));
+  setRozhlasTab(tab);
   renderNovinky();
+  renderActivity();
   renderRozhlas();
-  // označit vše jako přečtené (novinky i rozhlas)
+  // označit vše jako přečtené (novinky + aktivita + rozhlas)
   localStorage.setItem('vacNovinkySeen', _novinkyLatest());
+  localStorage.setItem('vacActivitySeen', String(_activityLatestTs()));
   var items = _rozhlasSorted();
   var newest = items.length ? (items[0].ts||0) : Date.now();
   localStorage.setItem('vacRozhlasRead', String(Math.max(newest, _rozhlasRead())));
   updateRozhlasBadge();
 }
 function closeRozhlas(){ document.getElementById('rozhlas-modal').classList.remove('show'); }
+
+// ── Feed aktivity „co se děje" (centrální log /aktivita, dle skillu #75) ──
+window._activityCache = [];
+function _activitySeen(){ return parseInt(localStorage.getItem('vacActivitySeen')||'0',10)||0; }
+function _activityLatestTs(){ return _activityCache.length ? (_activityCache[0].ts||0) : _activitySeen(); }
+function _activityUnread(){
+  var me = window.currentUser && window.currentUser.uid, seen=_activitySeen();
+  return _activityCache.filter(function(a){ return (a.ts||0)>seen && a.kdoUid!==me; }).length;
+}
+// Zaloguj akci: emoji + věta BEZ jména (jméno se doplní zvlášť). Volá se v success větvi akce.
+function logActivity(emoji, text){
+  if(!db || !window.currentUser) return;
+  try{
+    db.ref('aktivita').push({
+      emoji: emoji||'•', text: text||'',
+      kdo: (window.currentUser.name)||'—', kdoUid: window.currentUser.uid||null,
+      ts: firebase.database.ServerValue.TIMESTAMP
+    });
+  }catch(e){}
+}
+function loadActivity(){
+  if(!db) return;
+  db.ref('aktivita').orderByChild('ts').limitToLast(80).on('value', function(snap){
+    var v=snap.val()||{};
+    _activityCache = Object.keys(v).map(function(k){ var o=v[k]||{}; o._id=k; return o; })
+      .sort(function(a,b){ return (b.ts||0)-(a.ts||0); });   // nejnovější nahoře
+    updateRozhlasBadge();
+    if(document.getElementById('rozhlas-modal').classList.contains('show')) renderActivity();
+  });
+}
+function renderActivity(){
+  var box=document.getElementById('rz-aktivita'); if(!box) return;
+  var seen=_activitySeen(), me=window.currentUser&&window.currentUser.uid;
+  if(!_activityCache.length){ box.innerHTML='<div class="rz-empty">Zatím žádná aktivita.</div>'; return; }
+  box.innerHTML=_activityCache.map(function(a){
+    var unread=((a.ts||0)>seen && a.kdoUid!==me) ? ' unread' : '';
+    return '<div class="rz-item'+unread+'">'+
+      '<div class="rz-txt">'+(a.emoji||'•')+' <b>'+_esc(a.kdo||'—')+'</b> '+_esc(a.text||'')+'</div>'+
+      '<div class="rz-meta">'+(a.ts?_relTime(a.ts):'')+'</div></div>';
+  }).join('');
+}
 function renderRozhlas(){
   var box = document.getElementById('rz-list');
   var items = _rozhlasSorted();
@@ -6416,6 +6465,7 @@ function completeLogin(user, nameOverride) {
   loadAllUsers();
   loadTasks();
   loadRozhlas();
+  loadActivity();
   // Data z DB, která dřív načítal init() PŘED loginem — teď až tady, po přihlášení
   // (DB má .read: auth != null, takže před loginem by se listenery zrušily). Idempotentní:
   // onAuthStateChanged→completeLogin může přijít víckrát, load* jen přepíšou .on() listener.
@@ -6983,6 +7033,7 @@ function saveTaskFromForm() {
       if(!isNaN(km)) task.km = km;
     }
     saveTaskToFirebase(task, function(){
+      if(!existing) logActivity('📋','zadal úkol „'+title+'"');
       closeNewTaskModal();
     });
   }
@@ -7149,6 +7200,7 @@ function doneConfirm() {
   if(vysledek) upd.vysledek=vysledek;
   db.ref('ukoly/' + t.id).update(upd).then(function(){
     _taskHistoryPush(t,'hotovo',vysledek?{text:vysledek}:null);
+    logActivity('✅','dokončil úkol „'+(t.title||'')+'"');
     closeDone(); showToast('✅ Úkol dokončen', 1500);
     try{ sendTaskNotificationRequest(t, 'hotovo'); }catch(e){}
   });
@@ -8588,7 +8640,7 @@ function kzpUploadFilePicked(input){
         if(typ!=='tepr') rec.technologickaCast = nazev;   // KZP se v listu zobrazuje přes technologickaCast
         return db.ref('kvalita/'+id).set(rec);
       })
-      .then(function(){ hideSync(); showToast('✅ '+(typ==='tepr'?'TePř':'KZP')+' nahráno', 2200); })
+      .then(function(){ logActivity('🧪','nahrál '+(typ==='tepr'?'TePř':'KZP')+' „'+nazev+'"'); hideSync(); showToast('✅ '+(typ==='tepr'?'TePř':'KZP')+' nahráno', 2200); })
       .catch(function(err){ hideSync(); console.error('uploadKzp:', err); showToast('❌ Nahrání selhalo: '+((err&&err.code)||''), 4000); });
   };
   reader.onerror=function(){ hideSync(); showToast('❌ Nepodařilo se načíst soubor', 2500); };
@@ -10801,10 +10853,14 @@ function copyDiaryExport(){
     <div class="rz-top"><h3>📢 Rozhlas</h3><button class="rz-x" onclick="closeRozhlas()">✕</button></div>
     <div class="rz-tabs">
       <button id="rz-tab-novinky" class="rz-tab active" onclick="setRozhlasTab('novinky')">🆕 Co je nového</button>
+      <button id="rz-tab-aktivita" class="rz-tab" onclick="setRozhlasTab('aktivita')">📋 Aktivita</button>
       <button id="rz-tab-rozhlas" class="rz-tab" onclick="setRozhlasTab('rozhlas')">📢 Rozhlas týmu</button>
     </div>
     <div id="rz-pane-novinky">
       <div id="rz-novinky" class="rz-list"></div>
+    </div>
+    <div id="rz-pane-aktivita" style="display:none;">
+      <div id="rz-aktivita" class="rz-list"></div>
     </div>
     <div id="rz-pane-rozhlas" style="display:none;">
       <div id="rz-compose" class="rz-compose" style="display:none;">
@@ -10851,7 +10907,7 @@ function copyDiaryExport(){
       <div class="hlp-sec">
         <h4>📢 Rozhlas a co je nového</h4>
         <ul>
-          <li><b>📢</b> nahoře – dvě záložky: <b>🆕 Co je nového</b> (novinky v aplikaci) a <b>📢 Rozhlas týmu</b> (oznámení).</li>
+          <li><b>📢</b> nahoře – tři záložky: <b>🆕 Co je nového</b> (novinky v aplikaci), <b>📋 Aktivita</b> (kdo co udělal – fotky, úkoly, poznámky…) a <b>📢 Rozhlas týmu</b> (oznámení).</li>
           <li>Červená tečka = máš něco nepřečteného. Po otevření zmizí.</li>
         </ul>
       </div>
