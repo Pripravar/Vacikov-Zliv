@@ -6245,9 +6245,8 @@ function _rozhlasSorted(){
 function updateRozhlasBadge(){
   var badge = document.getElementById('rozhlas-badge');
   if(!badge) return;
-  var last = _rozhlasRead();
-  var nRoz = _rozhlasSorted().filter(function(o){ return (o.ts||0) > last; }).length;
-  var n = nRoz + _novinkyUnread() + _activityUnread();
+  // Rozhlas týmu sražen na standard (jen Co je nového + Aktivita) → do badge nepočítáme
+  var n = _novinkyUnread() + _activityUnread();
   badge.textContent = n > 99 ? '99+' : n;
   badge.classList.toggle('show', n > 0);
 }
@@ -6274,10 +6273,8 @@ function renderNovinky(){
 function openRozhlas(){
   document.getElementById('rz-compose').style.display = isAdmin() ? '' : 'none';
   document.getElementById('rozhlas-modal').classList.add('show');
-  // otevři na záložce, kde je něco nepřečteného (novinky → aktivita → rozhlas)
-  var tab = _novinkyUnread()>0 ? 'novinky'
-          : (_activityUnread()>0 ? 'aktivita'
-          : (_rozhlasSorted().filter(function(o){return (o.ts||0)>_rozhlasRead();}).length ? 'rozhlas' : 'novinky'));
+  // otevři na záložce, kde je něco nepřečteného (novinky → aktivita)
+  var tab = _novinkyUnread()>0 ? 'novinky' : (_activityUnread()>0 ? 'aktivita' : 'novinky');
   setRozhlasTab(tab);
   renderNovinky();
   renderActivity();
@@ -10854,7 +10851,7 @@ function copyDiaryExport(){
     <div class="rz-tabs">
       <button id="rz-tab-novinky" class="rz-tab active" onclick="setRozhlasTab('novinky')">🆕 Co je nového</button>
       <button id="rz-tab-aktivita" class="rz-tab" onclick="setRozhlasTab('aktivita')">📋 Aktivita</button>
-      <button id="rz-tab-rozhlas" class="rz-tab" onclick="setRozhlasTab('rozhlas')">📢 Rozhlas týmu</button>
+      <button id="rz-tab-rozhlas" class="rz-tab" onclick="setRozhlasTab('rozhlas')" style="display:none;">📢 Rozhlas týmu</button>
     </div>
     <div id="rz-pane-novinky">
       <div id="rz-novinky" class="rz-list"></div>
