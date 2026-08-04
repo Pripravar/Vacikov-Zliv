@@ -728,8 +728,11 @@ textarea.note-field { min-height:80px; resize:vertical; }
 /* -- Standalone foto galerie ----------------------------- */
 #gallery-modal { position:fixed; inset:0; background:rgba(0,0,0,0.95); z-index:4800; display:none; flex-direction:column; }
 #gallery-modal.open { display:flex; }
-#gallery-header { background:var(--panel); padding:12px 14px; padding-top:calc(12px + env(safe-area-inset-top)); display:flex; align-items:center; gap:10px; flex-shrink:0; border-bottom:1px solid var(--border); }
-#gallery-header h3 { flex:1; font-size:15px; font-weight:700; color:var(--accent2); }
+#gallery-header { background:var(--panel); padding:12px 14px; padding-top:calc(12px + env(safe-area-inset-top)); display:flex; align-items:center; gap:10px; flex-shrink:0; border-bottom:1px solid var(--border); overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch; scrollbar-width:thin; }
+#gallery-header::-webkit-scrollbar { height:3px; }
+#gallery-header::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+#gallery-header > * { flex-shrink:0; }
+#gallery-header h3 { font-size:15px; font-weight:700; color:var(--accent2); white-space:nowrap; margin-right:auto; }
 #gallery-close { background:none; border:none; color:var(--text2); font-size:22px; cursor:pointer; padding:4px 8px; }
 #gallery-tabs { display:flex; flex-shrink:0; background:var(--panel2); }
 .gallery-tab { flex:1; padding:10px; text-align:center; font-size:13px; font-weight:700; color:var(--text2); cursor:pointer; border-bottom:2px solid transparent; transition:all .2s; }
@@ -1189,20 +1192,20 @@ document.addEventListener('touchend', function(e){
     <button onclick="gotoSavedMapView(true)" title="Přejít na uložený pohled" style="flex:1;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 4px;font-size:12px;cursor:pointer;">📍 Můj pohled</button>
     <button onclick="resetMapView()" title="Obnovit výchozí (celá trasa)" style="flex:1;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 4px;font-size:12px;cursor:pointer;">⌂ Výchozí</button>
   </div>
-  <div class="layer-row">
+  <div class="layer-row" data-perm="katastr">
     <label>🗺️ Katastr (KN)</label>
     <label class="toggle"><input type="checkbox" id="lyr-katastr" onchange="toggleKatastr(this.checked)"><span class="toggle-slider"></span></label>
   </div>
   <h3>📍 Vrstvy</h3>
-  <div class="layer-row">
+  <div class="layer-row" data-perm="trasa">
     <label>🛣️ Trasa</label>
     <label class="toggle"><input type="checkbox" id="lyr-trasa" checked onchange="toggleLayer('trasa',this.checked)"><span class="toggle-slider"></span></label>
   </div>
-  <div class="layer-row">
+  <div class="layer-row" data-perm="trasa">
     <label>📏 Staničení 100m</label>
     <label class="toggle"><input type="checkbox" id="lyr-st100" checked onchange="toggleLayer('st100',this.checked)"><span class="toggle-slider"></span></label>
   </div>
-  <div class="layer-row">
+  <div class="layer-row" data-perm="trasa">
     <label>📐 Staničení 20m</label>
     <label class="toggle"><input type="checkbox" id="lyr-st20" onchange="toggleLayer('st20',this.checked)"><span class="toggle-slider"></span></label>
   </div>
@@ -1258,7 +1261,7 @@ document.addEventListener('touchend', function(e){
   </div>
   </div><!-- /tasks-sublayers -->
   </div><!-- /data-perm ukoly -->
-  <div class="layer-row">
+  <div class="layer-row" data-perm="gps">
     <label>📍 GPS poloha</label>
     <label class="toggle"><input type="checkbox" id="lyr-gps" checked onchange="toggleGPS(this.checked)"><span class="toggle-slider"></span></label>
   </div>
@@ -1862,6 +1865,7 @@ function addPRMarker(group, lat, lng, realKm, bear, pr) {
 }
 
 function openPRPanel(realKm, pr) {
+  if(!_perm('pdf')) return;
   showToast('PŘ km '+fmtKm(realKm)+' (řez č.'+pr.rezIdx+'/'+pr.total+')', 2000);
   var prPos = realKmToLatLng(realKm);
   if(prPos) showSelectionRing(L.latLng(prPos[0], prPos[1]));
@@ -2329,7 +2333,10 @@ function togglePdfFs() {
 }
 
 // ── GPS ───────────────────────────────
-function toggleGPS(en){en?startGPS():stopGPS();}
+function toggleGPS(en){
+  if(en && !hasPerm('gps')){ var cb=document.getElementById('lyr-gps'); if(cb) cb.checked=false; showToast('🔒 GPS ti administrátor nepovolil', 2600); return; }
+  en?startGPS():stopGPS();
+}
 
 function startGPS() {
   if(!navigator.geolocation){showToast('GPS není k dispozici');return;}
@@ -2464,8 +2471,16 @@ function resetMapView() {
 function toggleLayers(){document.getElementById('layers-panel').classList.toggle('open');}
 function closeLayersPanel(){document.getElementById('layers-panel').classList.remove('open');}
 
+// Vrstva → potřebné právo (směrově-citlivý guard: VYPNOUT jde vždy, ZAPNOUT jen s právem)
+var LAYER_PERM = { trasa:'trasa', st100:'trasa', st20:'trasa',
+  notes0:'pripominky', notes1:'pripominky', notes2:'pripominky', notes3:'pripominky',
+  notes4:'pripominky', notes5:'pripominky', notes6:'pripominky' };
 function toggleLayer(name,en){
   if(!layerGroups[name])return;
+  if(en && LAYER_PERM[name] && !hasPerm(LAYER_PERM[name])){
+    var cb=document.getElementById('lyr-'+name); if(cb) cb.checked=false;
+    showToast('🔒 Tuto vrstvu ti administrátor nepovolil', 2600); return;
+  }
   en?layerGroups[name].addTo(map):map.removeLayer(layerGroups[name]);
 }
 
@@ -2479,6 +2494,7 @@ function setBasemap(type,btn){
 }
 function toggleKatastr(en) {
   if(!baseLayers.katastr) return;
+  if(en && !hasPerm('katastr')){ var cb=document.getElementById('lyr-katastr'); if(cb) cb.checked=false; showToast('🔒 Katastr ti administrátor nepovolil', 2600); return; }
   if(en) {
     baseLayers.katastr.addTo(map);
     // Zajistit že katastr je nad podkladem ale pod ostatními vrstvami
@@ -4892,6 +4908,7 @@ function buildPropustky() {
 }
 
 function openPropPanel(prop) {
+  if(!_perm('pdf')) return;
   var pPos = realKmToLatLng(prop.km); if(pPos) showSelectionRing(L.latLng(pPos[0],pPos[1]));
   currentPropId = prop.id;
   // Varianta A: každý propustek má pole 'vykresy' s kompletní sadou (situace, PP, vzor.řezy, ...)
@@ -5255,6 +5272,7 @@ var currentPrikopId = null;
 var prikopLayers = {}; // id → {line, labelMarker}
 
 function openPrikopModal(u, stranaLabel) {
+  if(!_perm('pdf')) return;
   currentPrikopId = u.id;
   document.getElementById('prikop-stav-title').textContent = '🧹 Čištění příkopu ' + stranaLabel;
   document.getElementById('prikop-stav-km').textContent = 'km ' + fmtKm(u.kmOd) + ' – ' + fmtKm(u.kmDo) + ' // délka: ' + u.delka + ' m';
@@ -5961,6 +5979,9 @@ var FEATURES = [
   {key:'mereni',    label:'Měření na mapě',            btns:['btn-measure','btn-mereni-evidence']},
   {key:'fotomapa',  label:'🗺️ Vrstva: Fotky v mapě',    btns:[]},
   {key:'pano',      label:'🗺️ Vrstva: 360° procházka trasou', btns:[]},
+  {key:'trasa',     label:'🗺️ Vrstva: Trasa a staničení', btns:[]},
+  {key:'katastr',   label:'🗺️ Vrstva: Katastr (KN)',      btns:[]},
+  {key:'gps',       label:'🗺️ Vrstva: GPS poloha (nutná k focení)', btns:[]},
   {key:'galerie',   label:'Galerie fotek',             btns:['btn-gallery']},
   {key:'pripominky',label:'Poznámky a úkoly na mapě',  btns:['btn-notes-evidence','btn-place']},
   {key:'ukoly',     label:'Úkolníček',                 btns:['btn-tasks']},
@@ -5980,6 +6001,11 @@ function isBlocked(uid){
   if(!me) return false;
   return !!(window.allUsers[me] && window.allUsers[me].blocked);
 }
+// ZÁMĚRNĚ allow-by-default (fail-OPEN): dokud se /uzivatele nenačte, má uživatel vše.
+// Vhodné pro MALÝ DŮVĚRYHODNÝ TÝM bez kategorií sub/investor (tahle stavba je nemá).
+// ⚠️ Kdyby se sem kdy přidal OMEZENÝ uživatel (subka/investor), přepni na fail-CLOSED
+// (`if(!window._usersLoaded) return ADMIN...`) — jinak by mezi loginem a načtením práv viděl vše.
+// Tvrdá hranice jsou tak jako tak Firebase pravidla; klient je UX brána.
 function hasPerm(f){
   var me = window.currentUser && window.currentUser.uid;
   if(!me) return false;
@@ -9893,7 +9919,7 @@ function copyDiaryExport(){
 <div id="gallery-modal">
   <div id="gallery-header">
     <h3>Fotogalerie <span id="gallery-count" style="color:var(--text2);font-size:11px;font-weight:400;margin-left:6px;"></span></h3>
-    <button id="btn-import-foto" onclick="importFotoStart()" title="Nahrát fotky z galerie telefonu" style="background:var(--green,#2f9e44);border:1px solid var(--border);border-radius:6px;color:#fff;padding:6px 10px;font-size:13px;cursor:pointer;margin-right:6px;font-weight:700;">📥 Import z telefonu</button>
+    <button id="btn-import-foto" onclick="importFotoStart()" title="Nahrát fotky z galerie telefonu" style="background:var(--green,#2f9e44);border:1px solid var(--border);border-radius:6px;color:#fff;padding:6px 10px;font-size:13px;cursor:pointer;margin-right:6px;font-weight:700;white-space:nowrap;">📥 Import</button>
     <button id="gallery-group-btn" onclick="toggleGalleryGrouped()" title="Zobrazit po stavebních objektech" style="background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;font-size:13px;cursor:pointer;margin-right:6px;">📁 Po objektech</button>
     <button id="gallery-select-btn" onclick="toggleGallerySelectMode()" title="Hromadný výběr" style="background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;font-size:13px;cursor:pointer;margin-right:6px;">☑️ Vybrat</button>
     <button onclick="toggleGalleryFilter()" title="Filtr" style="background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;font-size:13px;cursor:pointer;margin-right:6px;">🔍 Filtr</button>
