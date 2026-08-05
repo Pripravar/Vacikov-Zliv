@@ -1273,9 +1273,9 @@ document.addEventListener('touchend', function(e){
     <label>📷 Fotky v mapě</label>
     <label class="toggle"><input type="checkbox" id="lyr-fotomapa" onchange="setFotoMapaVisible(this.checked)"><span class="toggle-slider"></span></label>
   </div>
-  <div class="layer-row" data-perm="pano">
-    <label>🌐 360° procházka</label>
-    <label class="toggle"><input type="checkbox" id="lyr-pano" onchange="setPanoVisible(this.checked)"><span class="toggle-slider"></span></label>
+  <div data-perm="pano">
+    <div style="font-size:11px;color:var(--text2);text-transform:uppercase;padding:4px 2px 0;">🌐 360° procházky</div>
+    <div id="pano-layer-rows"></div>
   </div>
   <h3>📷 Fotky</h3>
   <div class="layer-row">
@@ -3232,51 +3232,75 @@ function setFotoMapaVisible(on){
 // GoPro ukládá střed snímku kolmo na směr jízdy (koukalo se do pole) → 90 = po silnici.
 var PANO_INIT_YAW = 90;
 window.pano360Data = {};
+window.panoLayers = {};   // skupina (procházka) → L.layerGroup
+window._panoGroupColors = {};
+var PANO_COLORS = ['#8e24aa','#1565c0','#2e7d32','#e65100','#c2185b','#00838f','#5d4037'];
+function _panoSlug(s){ return String(s).replace(/[^a-zA-Z0-9]+/g,'_'); }
+function _panoGroupOf(rec){ return (rec && (rec.skupina || rec.datum)) || '360° procházka'; }
+function _panoGroupColor(sk){
+  if(!window._panoGroupColors[sk]){ var i=Object.keys(window._panoGroupColors).length; window._panoGroupColors[sk]=PANO_COLORS[i%PANO_COLORS.length]; }
+  return window._panoGroupColors[sk];
+}
 function loadPanorama360(){
   if(!db) return;
   db.ref('panorama_360').on('value', function(snap){
     window.pano360Data = snap.val() || {};
-    var cb=document.getElementById('lyr-pano');
-    if(cb && cb.checked && hasPerm('pano')) renderPano360Markers();
+    renderPanoLayerRows();
+    // překresli právě zapnuté skupiny
+    Object.keys(window.panoLayers).forEach(function(sk){
+      if(map.hasLayer(window.panoLayers[sk]) && hasPerm('pano')) renderPanoGroup(sk);
+    });
   });
 }
-// pole seřazené podle 'order'
-function _panoSorted(){
+// unikátní skupiny (procházky) + počty, seřazené
+function _panoGroups(){
+  var d=window.pano360Data||{}, set={};
+  Object.keys(d).forEach(function(k){ var s=_panoGroupOf(d[k]); set[s]=(set[s]||0)+1; });
+  return Object.keys(set).sort().map(function(s){ return {skupina:s, count:set[s]}; });
+}
+// záznamy jedné skupiny seřazené podle 'order'
+function _panoSortedGroup(sk){
   var d=window.pano360Data||{};
   return Object.keys(d).map(function(k){ var o=Object.assign({},d[k]); o.__id=k; return o; })
+    .filter(function(o){ return _panoGroupOf(o)===sk; })
     .sort(function(a,b){ return (a.order||0)-(b.order||0); });
 }
-function _panoNeighbor(id, dir){
-  var arr=_panoSorted(), i=-1;
-  for(var j=0;j<arr.length;j++){ if(arr[j].__id===id){ i=j; break; } }
-  if(i<0) return null;
-  var n=i+dir;
-  return (n>=0 && n<arr.length) ? arr[n] : null;
+// dynamické přepínače vrstev (jedna procházka = jedna zapnutelná vrstva)
+function renderPanoLayerRows(){
+  var box=document.getElementById('pano-layer-rows'); if(!box) return;
+  var groups=_panoGroups();
+  if(!groups.length){ box.innerHTML=''; return; }
+  box.innerHTML = groups.map(function(g){
+    var id='lyr-pano-'+_panoSlug(g.skupina), col=_panoGroupColor(g.skupina);
+    var checked = (window.panoLayers[g.skupina] && map && map.hasLayer(window.panoLayers[g.skupina])) ? ' checked' : '';
+    return '<div class="layer-row"><label><span style="color:'+col+';">🌐</span> '+_esc(g.skupina)+' <span style="color:var(--text2);font-size:11px;">('+g.count+')</span></label>'+
+      '<label class="toggle"><input type="checkbox" id="'+id+'"'+checked+' onchange="setPanoGroupVisible(this.getAttribute(\'data-sk\'),this.checked)" data-sk="'+_esc(g.skupina)+'"><span class="toggle-slider"></span></label></div>';
+  }).join('');
 }
-function renderPano360Markers(){
+function renderPanoGroup(sk){
   if(!hasPerm('pano')) return;
-  if(!layerGroups.pano) layerGroups.pano=L.layerGroup();
-  layerGroups.pano.clearLayers();
-  var arr=_panoSorted();
-  if(!arr.length) return;
-  // fialová spojnice procházky
+  if(!window.panoLayers[sk]) window.panoLayers[sk]=L.layerGroup();
+  var lg=window.panoLayers[sk]; lg.clearLayers();
+  var arr=_panoSortedGroup(sk), col=_panoGroupColor(sk);
   var pts=arr.filter(function(o){ return typeof o.lat==='number' && typeof o.lng==='number'; }).map(function(o){ return [o.lat,o.lng]; });
-  if(pts.length>1) L.polyline(pts,{color:'#8e24aa',weight:3,opacity:0.85,interactive:false}).addTo(layerGroups.pano);
+  if(pts.length>1) L.polyline(pts,{color:col,weight:3,opacity:0.85,interactive:false}).addTo(lg);
   arr.forEach(function(o){
     if(typeof o.lat!=='number' || typeof o.lng!=='number') return;
-    var icon=L.divIcon({className:'',iconAnchor:[13,13],html:'<div style="width:26px;height:26px;border-radius:50%;background:#8e24aa;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-size:13px;">🌐</div>'});
+    var icon=L.divIcon({className:'',iconAnchor:[13,13],html:'<div style="width:26px;height:26px;border-radius:50%;background:'+col+';border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-size:13px;">🌐</div>'});
     var mk=L.marker([o.lat,o.lng],{icon:icon});
     (function(id){ mk.on('click',function(){ openPano360(id); }); })(o.__id);
-    mk.addTo(layerGroups.pano);
+    mk.addTo(lg);
   });
 }
-function setPanoVisible(on){
-  var cb=document.getElementById('lyr-pano');
+function setPanoGroupVisible(sk, on){
+  var cb=document.getElementById('lyr-pano-'+_panoSlug(sk));
   if(on && !hasPerm('pano')){ if(cb) cb.checked=false; showToast('🔒 360° procházku ti administrátor nepovolil', 2800); return; }
-  if(!layerGroups.pano) layerGroups.pano=L.layerGroup();
-  if(on){ renderPano360Markers(); layerGroups.pano.addTo(map); }
-  else { map.removeLayer(layerGroups.pano); }
+  if(!window.panoLayers[sk]) window.panoLayers[sk]=L.layerGroup();
+  if(on){ renderPanoGroup(sk); window.panoLayers[sk].addTo(map); }
+  else { map.removeLayer(window.panoLayers[sk]); }
 }
+// zpětná kompatibilita (kdyby něco volalo starý název)
+function _panoSorted(){ return _panoSortedGroup(window._panoCurSkupina || (_panoGroups()[0]||{}).skupina); }
 
 // Prohlížeč jednoho panoramatu (fullscreen Pannellum) + navigace po trase
 window._panoViewer = null;
@@ -3286,20 +3310,20 @@ function openPano360(id){
   var rec=(window.pano360Data||{})[id];
   if(!rec){ return; }
   window._panoCurId=id;
+  window._panoCurSkupina=_panoGroupOf(rec);
   document.getElementById('pano-modal').classList.add('open');
   // km počítej živě z GPS (drží se aktuální kalibrace osy, ne uložené staré hodnoty v DB)
   var kmNum = (typeof rec.lat==='number' && typeof rec.lng==='number' && typeof gpsToKm==='function') ? gpsToKm(rec.lat, rec.lng) : rec.km;
   var kmStr = (kmNum!=null && !isNaN(kmNum)) ? ('km '+fmtKm(kmNum)) : '';
   var info=document.getElementById('pano-info');
-  if(info) info.textContent='🌐 '+kmStr+(rec.datum?(' · '+rec.datum):'');
-  // pozice v řadě + viditelnost navigace (rychle ±4 / pomalu ±1, oba směry) + počítadlo
-  var _arr=_panoSorted(), _idx=-1;
+  // pozice v řadě V RÁMCI SKUPINY + viditelnost navigace + počítadlo
+  var _arr=_panoSortedGroup(window._panoCurSkupina), _idx=-1;
   for(var _j=0;_j<_arr.length;_j++){ if(_arr[_j].__id===id){ _idx=_j; break; } }
   var atFirst=(_idx<=0), atLast=(_idx<0 || _idx>=_arr.length-1);
   [['pano-fast-back',atFirst],['pano-prev',atFirst],['pano-fast-fwd',atLast],['pano-next',atLast]].forEach(function(p){
     var el=document.getElementById(p[0]); if(el) el.style.visibility=p[1]?'hidden':'visible';
   });
-  if(info && _idx>=0) info.textContent='🌐 '+kmStr+' · '+(_idx+1)+'/'+_arr.length+(rec.datum?(' · '+rec.datum):'');
+  if(info) info.textContent='🌐 '+_esc(window._panoCurSkupina)+(kmStr?(' · '+kmStr):'')+(_idx>=0?(' · '+(_idx+1)+'/'+_arr.length):'');
   resolveFileUrl(rec.path).then(function(url){
     if(!url){ showToast('❌ Panorama se nenačetlo',2500); return; }
     if(window._panoViewer){ try{ window._panoViewer.destroy(); }catch(e){} window._panoViewer=null; }
@@ -3315,7 +3339,7 @@ function openPano360(id){
   });
 }
 function _panoJump(id, delta){
-  var arr=_panoSorted(), i=-1;
+  var arr=_panoSortedGroup(window._panoCurSkupina), i=-1;
   for(var j=0;j<arr.length;j++){ if(arr[j].__id===id){ i=j; break; } }
   if(i<0) return null;
   var n=Math.max(0, Math.min(arr.length-1, i+delta));
@@ -6213,6 +6237,7 @@ function closeStats(){ document.getElementById('stats-modal').classList.remove('
 // ── „Co je nového" — changelog aplikace (udržuje vývojář, nejnovější nahoře) ──
 // PRAVIDLO: s každou novou funkcí přidej řádek sem (datum YYYY-MM-DD) + aktualizuj Nápovědu.
 var APP_NOVINKY = [
+  {datum:'2026-08-05', verze:'360°', text:'🌐 Více 360° procházek – ve Vrstvách je teď každá procházka zvlášť zapnutelná: „Pá 31.07.26", „Út 04.08.26" a „Út 04.08.26 (Leletice)". Každá má vlastní barvu bodů; navigace šipkami zůstává v rámci jedné procházky.'},
   {datum:'2026-08-01', verze:'aktivita', text:'📋 Feed aktivity „co se děje" – v 📢 nahoře nová záložka „Aktivita": chronologicky kdo co udělal (fotky, úkoly, poznámky, měření, výkresy, KZP). Červená tečka = nové akce ostatních.'},
   {datum:'2026-08-01', verze:'foto', text:'📥 Import fotek z galerie telefonu – v Galerii tlačítko „📥 Import z telefonu". Vybereš víc fotek naráz, km se vezme z GPS ve fotce (nebo tvé polohy), nahrání běží na pozadí. Objekt/úsek i km jde u fotky změnit ve fullscreenu (🏗️ / 📍).'},
   {datum:'2026-08-01', verze:'kvalita', text:'🧪 Kvalita: nahrání TePř a KZP přímo z aplikace (📤 Nahrát PDF) – TePř jde i podepsat (✍️). Dokumenty jsou soukromé (Storage, jen pro přihlášené).'},
@@ -10896,7 +10921,7 @@ function copyDiaryExport(){
       <div class="hlp-sec">
         <h4>🌐 360° procházka trasou</h4>
         <ul>
-          <li>Zapni ve <b>☰ Vrstvy → 🌐 360° procházka</b> – na mapě fialová trasa s 🌐 body.</li>
+          <li>Zapni ve <b>☰ Vrstvy → 🌐 360° procházky</b> – každá procházka (podle data) je zvlášť zapnutelná, vlastní barva bodů.</li>
           <li>Klik na bod otevře <b>panorama</b>. Táhni prstem pro rozhlédnutí do všech stran.</li>
           <li>Pohyb po trase: <b>nahoru = vpřed, dolů = zpět</b>. <b>⏫⏬</b> skočí rychle (o 4 fotky), <b>▲▼</b> po jedné.</li>
         </ul>
