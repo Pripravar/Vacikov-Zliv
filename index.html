@@ -112,7 +112,17 @@ body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui
 
 #btn-gps { position:fixed; bottom:24px; right:16px; width:48px; height:48px; border-radius:50%; background:var(--panel2); border:2px solid var(--border); color:var(--text); font-size:22px; cursor:pointer; z-index:1500; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 16px rgba(0,0,0,.4); transition:all .2s; }
 #btn-gps.active { border-color:var(--green); color:var(--green); box-shadow:0 0 16px rgba(72,187,120,.4); }
-#btn-place { position:fixed; bottom:82px; right:16px; width:48px; height:48px; border-radius:50%; background:var(--panel2); border:2px solid var(--border); color:var(--text); font-size:20px; cursor:pointer; z-index:1500; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 16px rgba(0,0,0,.4); }
+/* FABy vpravo dole: 📍gps(24) · 📷foto(84) · ⋯more(144) → fan: 📍➕place / 📏měření / 📝blok. Vlevo dole ⌂domeček. */
+#btn-foto-fab, #btn-fabmore, #btn-home-fab, .fab-sub { position:fixed; right:16px; width:48px; height:48px; border-radius:50%; background:var(--panel2); border:2px solid var(--border); color:var(--text); font-size:20px; cursor:pointer; z-index:1500; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 16px rgba(0,0,0,.4); }
+#btn-foto-fab { bottom:84px; }
+#btn-fabmore { bottom:144px; font-size:26px; transition:transform .25s; }
+body.fab-open #btn-fabmore { transform:rotate(90deg); background:var(--accent); color:#fff; }
+#btn-home-fab { left:16px; right:auto; bottom:24px; }
+.fab-sub { bottom:144px; opacity:0; transform:scale(.4); pointer-events:none; transition:transform .22s ease, opacity .22s ease; }
+body.fab-open .fab-sub { opacity:1; pointer-events:auto; }
+body.fab-open #btn-place  { transform:translate(0,-64px); }
+body.fab-open #btn-measure{ transform:translate(-46px,-46px); }
+body.fab-open #btn-blok   { transform:translate(-64px,0); }
 #btn-place.active { border-color:#e94560; color:#e94560; }
 #map-crosshair { display:none; position:fixed; width:44px; height:44px; transform:translate(-50%,-50%); pointer-events:none; z-index:1200; }
 #map-crosshair::before, #map-crosshair::after { content:''; position:absolute; background:#e94560; box-shadow:0 0 0 1.5px #fff, 0 0 4px rgba(0,0,0,.6); }
@@ -123,7 +133,6 @@ body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui
 #place-bar .pb-text { font-size:14px; color:var(--text); text-align:center; }
 #place-bar .pb-btns { display:flex; gap:10px; }
 #place-bar button { border:none; border-radius:10px; padding:12px 20px; font-size:15px; font-weight:700; cursor:pointer; min-height:44px; }
-#btn-measure { position:fixed; bottom:140px; right:16px; width:48px; height:48px; border-radius:50%; background:var(--panel2); border:2px solid var(--border); color:var(--text); font-size:20px; cursor:pointer; z-index:1500; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 16px rgba(0,0,0,.4); }
 #btn-measure.active { border-color:#e6b400; color:#e6b400; box-shadow:0 0 16px rgba(230,180,0,.4); }
 #measure-hud { display:none; position:fixed; bottom:0; left:0; right:0; z-index:4500; background:rgba(15,20,40,.97); border-top:1px solid var(--border); padding:10px 12px calc(10px + env(safe-area-inset-bottom)); flex-direction:column; gap:8px; }
 #measure-hud.open { display:flex; }
@@ -832,6 +841,13 @@ textarea.note-field { min-height:80px; resize:vertical; }
 .rz-nov .rz-nov-date { font-size:11px; color:var(--text2); font-weight:700; }
 .rz-nov .rz-nov-ver { font-size:10px; color:var(--accent2); background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:1px 5px; }
 .rz-nov .rz-nov-txt { font-size:13.5px; line-height:1.45; color:var(--text); white-space:pre-wrap; }
+#blok-modal { display:none; position:fixed; inset:0; z-index:5000; background:rgba(0,0,0,.55); align-items:flex-start; justify-content:center; padding:24px 12px; overflow-y:auto; }
+#blok-modal.open { display:flex; }
+.blk-item { background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:11px 12px; }
+.blk-txt { font-size:14px; white-space:pre-wrap; line-height:1.45; color:var(--text); word-break:break-word; }
+.blk-meta { font-size:11px; color:var(--text2); margin-top:6px; }
+.blk-act { display:flex; gap:8px; margin-top:8px; }
+.blk-act button { background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text2); font-size:12px; padding:5px 10px; cursor:pointer; }
 .hlp-card { max-width:600px; }
 .hlp-body { max-height:70vh; overflow-y:auto; }
 .hlp-sec { margin-bottom:16px; }
@@ -1285,7 +1301,11 @@ document.addEventListener('touchend', function(e){
 </div>
 
 <button id="btn-gps" onclick="toggleGpsBtn()" title="GPS zapnout/vypnout / centrovat">📍</button>
-<button id="btn-place" onclick="startPlaceMode()" title="Přidat poznámku/úkol na střed mapy">📍➕</button>
+<button id="btn-foto-fab" onclick="takeStandalonePhoto()" title="Vyfotit">📷</button>
+<button id="btn-fabmore" onclick="toggleFabMore()" title="Další nástroje">⋯</button>
+<button id="btn-home-fab" onclick="resetMapView()" title="Domů – celá trasa">⌂</button>
+<button id="btn-place" class="fab-sub" onclick="closeFabMore();startPlaceMode()" title="Přidat poznámku/úkol na střed mapy">📍➕</button>
+<button id="btn-blok" class="fab-sub" onclick="closeFabMore();openBlok()" title="Poznámkový blok (zápisník)">📝</button>
 <div id="map-crosshair"></div>
 <div id="place-bar">
   <div class="pb-text" id="place-bar-text">Najeď křížkem na místo a potvrď</div>
@@ -1294,7 +1314,7 @@ document.addEventListener('touchend', function(e){
     <button onclick="confirmPlace()" style="background:#e94560;color:#fff;">📍 Tady</button>
   </div>
 </div>
-<button id="btn-measure" onclick="startMeasure()" title="Měření na mapě">📏</button>
+<button id="btn-measure" class="fab-sub" onclick="closeFabMore();startMeasure()" title="Měření na mapě">📏</button>
 <div id="measure-hud">
   <div id="measure-readout">Najeď křížkem a ➕ Bod</div>
   <div class="mh-types">
@@ -2972,6 +2992,70 @@ function _placeKmText(){
   var el=document.getElementById('place-bar-text'); if(el) el.textContent=t;
 }
 function _onPlaceMove(){ _placeKmText(); }
+// ── FAB ⋯ dial (rozbalí place/měření/blok kolem sebe) ──
+function toggleFabMore(){ document.body.classList.toggle('fab-open'); }
+function closeFabMore(){ document.body.classList.remove('fab-open'); }
+document.addEventListener('click', function(e){
+  if(!document.body.classList.contains('fab-open')) return;
+  var t=e.target;
+  if(t && t.closest && (t.closest('#btn-fabmore') || t.closest('.fab-sub'))) return;
+  closeFabMore();
+}, true);
+
+// ── Poznámkový blok (osobní zápisník; moje + cizí veřejné) ──
+window.blokData = {};
+function loadBlok(){
+  if(!db) return;
+  db.ref('blok_poznamky').on('value', function(snap){
+    window.blokData = snap.val() || {};
+    if(document.getElementById('blok-modal').classList.contains('open')) renderBlok();
+  });
+}
+function openBlok(){
+  if(!_perm('blok')) return;
+  if(!window.currentUser){ showToast('Nejdřív se přihlas', 2000); return; }
+  document.getElementById('blok-modal').classList.add('open');
+  renderBlok();
+}
+function closeBlok(){ document.getElementById('blok-modal').classList.remove('open'); }
+function renderBlok(){
+  var me = window.currentUser && window.currentUser.uid;
+  var box = document.getElementById('blok-list'); if(!box) return;
+  var arr = Object.keys(window.blokData||{}).map(function(k){ var o=Object.assign({},window.blokData[k]); o._id=k; return o; })
+    .filter(function(n){ return n.uid===me || n.verejne; })
+    .sort(function(a,b){ return (b.ts||0)-(a.ts||0); });
+  if(!arr.length){ box.innerHTML='<div class="rz-empty">Zatím žádné poznámky. Napiš si první nahoře.</div>'; return; }
+  box.innerHTML = arr.map(function(n){
+    var mine = n.uid===me, when = n.ts ? _relTime(n.ts) : '';
+    var tag = mine ? (n.verejne?'🌐 veřejná':'🔒 soukromá') : '🌐';
+    var actions = mine ? ('<div class="blk-act">'+
+      '<button onclick="toggleBlokPublic(\''+n._id+'\')">'+(n.verejne?'🔒 Skrýt':'🌐 Zveřejnit')+'</button>'+
+      '<button onclick="deleteBlok(\''+n._id+'\')">🗑️</button></div>') : '';
+    return '<div class="blk-item"><div class="blk-txt">'+_esc(n.text||'')+'</div>'+
+      '<div class="blk-meta">👤 '+_esc(n.author||'—')+' · '+when+' · '+tag+'</div>'+actions+'</div>';
+  }).join('');
+}
+function addBlok(){
+  if(!_perm('blok')) return;
+  var ta=document.getElementById('blok-text'); var txt=(ta.value||'').trim();
+  if(!txt){ ta.focus(); return; }
+  var verejne = document.getElementById('blok-verejne').checked;
+  db.ref('blok_poznamky').push({ text:txt, uid:(window.currentUser&&window.currentUser.uid)||null,
+    author:(window.currentUser&&window.currentUser.name)||'—', ts:Date.now(), verejne:!!verejne })
+    .then(function(){ ta.value=''; document.getElementById('blok-verejne').checked=false; });
+}
+function toggleBlokPublic(id){
+  var n=(window.blokData||{})[id]; if(!n) return;
+  if(!(window.currentUser && n.uid===window.currentUser.uid)){ showToast('Můžeš měnit jen své', 2000); return; }
+  db.ref('blok_poznamky/'+id+'/verejne').set(!n.verejne);
+}
+function deleteBlok(id){
+  var n=(window.blokData||{})[id]; if(!n) return;
+  if(!(window.currentUser && n.uid===window.currentUser.uid)){ showToast('Můžeš mazat jen své', 2000); return; }
+  if(!confirm('Smazat tuto poznámku?')) return;
+  db.ref('blok_poznamky/'+id).remove();
+}
+
 function startPlaceMode(){
   if(!_perm('pripominky')) return;
   document.getElementById('lp-chooser').classList.remove('open');
@@ -3481,7 +3565,8 @@ function burnInMetadata(dataUrl, km, author, callback) {
     canvas.width = img.width; canvas.height = img.height;
     var ctx = canvas.getContext('2d');
     ctx.drawImage(img, 0, 0);
-    var dnes = new Date().toLocaleDateString('cs-CZ');
+    var _now = new Date();
+    var dnes = _now.toLocaleDateString('cs-CZ') + ' ' + _now.toLocaleTimeString('cs-CZ', {hour:'2-digit', minute:'2-digit'});
     var line1 = 'km ' + (km || '-') + '   •   ' + dnes;
     var line2 = author || '';
     var fontSize = Math.max(20, Math.round(img.width / 40));
@@ -3868,12 +3953,25 @@ function photoCreationDate(item) {
 function pad2(n){ return (n<10?'0':'')+n; }
 
 // Souborové jméno: stavba_2026-05-12_1423_km1+540_Ondrej.jpg
+// Iniciály autora: „Ondřej Svoboda" → „OS" (ASCII, max 3 znaky)
+function _authorInitials(name){
+  var parts = String(name||'').trim().split(/\s+/).filter(Boolean);
+  if(!parts.length) return '';
+  var ini = '';
+  parts.forEach(function(p){
+    var c = p.normalize('NFD').charAt(0).toUpperCase();   // NFD → základ (Ř→R+háček, vezmi R)
+    if(/[A-Z]/.test(c)) ini += c;
+  });
+  if(!ini) ini = parts.map(function(p){ return p.charAt(0).toUpperCase(); }).join('');
+  return ini.slice(0,3);
+}
 function photoFilename(item, idx) {
   var d = photoCreationDate(item);
-  var base = 'stavba_' + d.getFullYear() + '-' + pad2(d.getMonth()+1) + '-' + pad2(d.getDate())
-           + '_' + pad2(d.getHours()) + pad2(d.getMinutes());
+  var base = 'vacikov_' + d.getFullYear() + '-' + pad2(d.getMonth()+1) + '-' + pad2(d.getDate())
+           + '_' + pad2(d.getHours()) + '-' + pad2(d.getMinutes());   // YYYY-MM-DD_HH-MM
   if(item && item.km) base += '_km' + String(item.km).replace(/\s+/g,'').replace(/[^\w+\-.]/g,'');
-  if(item && item.author) base += '_' + String(item.author).replace(/\s+/g,'_').replace(/[^\w\-]/g,'');
+  var ini = item && item.author ? _authorInitials(item.author) : '';
+  if(ini) base += '_' + ini;
   if(typeof idx === 'number') base += '_' + (idx+1);
   return base + '.jpg';
 }
@@ -3985,7 +4083,7 @@ function burnInMetadataWithDate(dataUrl, km, author, dateObj, callback) {
     canvas.width = img.width; canvas.height = img.height;
     var ctx = canvas.getContext('2d');
     ctx.drawImage(img, 0, 0);
-    var dStr = dateObj.toLocaleDateString('cs-CZ');
+    var dStr = dateObj.toLocaleDateString('cs-CZ') + ' ' + dateObj.toLocaleTimeString('cs-CZ', {hour:'2-digit', minute:'2-digit'});
     var line1 = 'km ' + (km || '-') + '   •   ' + dStr;
     var line2 = author || '';
     var fontSize = Math.max(20, Math.round(img.width / 40));
@@ -6000,7 +6098,7 @@ window.allUsers    = {};       // {uid: {uid,name,email,photo,fcmToken,lastSeen}
 var ADMIN_EMAILS = ['arasid33@gmail.com'];   // bootstrap admin (koordinátor) – je admin hned po přihlášení
 var FEATURES = [
   {key:'pdf',       label:'Prohlížení výkresů / PD (PDF)', btns:[]},
-  {key:'foto',      label:'Focení',                    btns:['btn-standalone-foto','btn-import-foto']},
+  {key:'foto',      label:'Focení',                    btns:['btn-standalone-foto','btn-import-foto','btn-foto-fab']},
   {key:'vykresy',   label:'Nahrávání výkresů / PDF',   btns:['btn-pdf-addvk']},
   {key:'mereni',    label:'Měření na mapě',            btns:['btn-measure','btn-mereni-evidence']},
   {key:'fotomapa',  label:'🗺️ Vrstva: Fotky v mapě',    btns:[]},
@@ -6011,6 +6109,7 @@ var FEATURES = [
   {key:'galerie',   label:'Galerie fotek',             btns:['btn-gallery']},
   {key:'pripominky',label:'Poznámky a úkoly na mapě',  btns:['btn-notes-evidence','btn-place']},
   {key:'ukoly',     label:'Úkolníček',                 btns:['btn-tasks']},
+  {key:'blok',      label:'Poznámkový blok (zápisník)', btns:['btn-blok']},
   {key:'denik',     label:'Deník / šichtovka',         btns:['btn-denik']},
   {key:'kvalita',   label:'Kvalita / KZP',             btns:['btn-kzp']}
 ];
@@ -6237,6 +6336,7 @@ function closeStats(){ document.getElementById('stats-modal').classList.remove('
 // ── „Co je nového" — changelog aplikace (udržuje vývojář, nejnovější nahoře) ──
 // PRAVIDLO: s každou novou funkcí přidej řádek sem (datum YYYY-MM-DD) + aktualizuj Nápovědu.
 var APP_NOVINKY = [
+  {datum:'2026-08-07', verze:'nástroje', text:'📷 Foťák i vpravo dole + tlačítko ⋯ (rozbalí místo/měření/📝blok) + ⌂ domů vlevo dole. 📝 Poznámkový blok (zápisník, soukromé/veřejné). 🔒 Soukromé úkoly – „Jen můj úkol" vidí jen zadavatel.'},
   {datum:'2026-08-05', verze:'360°', text:'🌐 Více 360° procházek – ve Vrstvách je teď každá procházka zvlášť zapnutelná: „Pá 31.07.26", „Út 04.08.26" a „Út 04.08.26 (Leletice)". Každá má vlastní barvu bodů; navigace šipkami zůstává v rámci jedné procházky.'},
   {datum:'2026-08-01', verze:'aktivita', text:'📋 Feed aktivity „co se děje" – v 📢 nahoře nová záložka „Aktivita": chronologicky kdo co udělal (fotky, úkoly, poznámky, měření, výkresy, KZP). Červená tečka = nové akce ostatních.'},
   {datum:'2026-08-01', verze:'foto', text:'📥 Import fotek z galerie telefonu – v Galerii tlačítko „📥 Import z telefonu". Vybereš víc fotek naráz, km se vezme z GPS ve fotce (nebo tvé polohy), nahrání běží na pozadí. Objekt/úsek i km jde u fotky změnit ve fullscreenu (🏗️ / 📍).'},
@@ -6488,6 +6588,7 @@ function completeLogin(user, nameOverride) {
   loadTasks();
   loadRozhlas();
   loadActivity();
+  loadBlok();
   // Data z DB, která dřív načítal init() PŘED loginem — teď až tady, po přihlášení
   // (DB má .read: auth != null, takže před loginem by se listenery zrušily). Idempotentní:
   // onAuthStateChanged→completeLogin může přijít víckrát, load* jen přepíšou .on() listener.
@@ -6717,8 +6818,8 @@ function saveTaskToFirebase(task, cb) {
   db.ref('ukoly/' + task.id).set(task).then(function(){
     hideSync();
     showToast('✅ Úkol uložen', 1500);
-    // Notifikační záznam pro Cloud Function
-    sendTaskNotificationRequest(task, 'novy');
+    // Notifikační záznam pro Cloud Function (soukromý úkol nikomu neposílá)
+    if(!task.soukromy) sendTaskNotificationRequest(task, 'novy');
     if(cb) cb();
   }).catch(function(e){
     console.error('Chyba uložení úkolu:', e);
@@ -6781,12 +6882,18 @@ function clearTaskFilter() {
   renderTasksList();
 }
 
+// Soukromý úkol vidí jen zadavatel (klient-side skrytí; DB čte kdokoli přihlášený)
+function _taskVisible(t){
+  if(!t || !t.soukromy) return true;
+  return !!(window.currentUser && t.zadalUid === window.currentUser.uid);
+}
 function filterTasksForTab(tab) {
   var uid = window.currentUser ? window.currentUser.uid : null;
   var profFilter = (document.getElementById('tasks-filter-prof') || {}).value || '';
   profFilter = profFilter.trim().toLowerCase();
   var now = Date.now();
   return window.allTasks.filter(function(t) {
+    if(!_taskVisible(t)) return false;
     if(profFilter && (!t.profese || t.profese.toLowerCase().indexOf(profFilter) === -1)) return false;
     if(tab === 'moje') {
       if(t.stav === 'done') return false;
@@ -6848,7 +6955,7 @@ function renderTasksList() {
     var km = (t.km !== undefined && t.km !== null) ? ('km ' + (typeof fmtKm === 'function' ? fmtKm(t.km) : t.km.toFixed(3))) : '';
     var cmtCount = t.komentare ? Object.keys(t.komentare).length : 0;
     return '<div class="' + cls + '" onclick="openTaskDetail(\'' + t.id + '\')">'
-      + '<div class="tc-title">' + escapeHtml(t.title || '(bez názvu)') + '</div>'
+      + '<div class="tc-title">' + (t.soukromy ? '🔒 ' : '') + escapeHtml(t.title || '(bez názvu)') + '</div>'
       + '<div class="tc-meta">'
       +   profHtml
       +   '<span>👥 ' + escapeHtml(prirazeno) + '</span>'
@@ -6865,7 +6972,7 @@ function updateTaskBadge() {
   var uid = window.currentUser ? window.currentUser.uid : null;
   if(!uid) return;
   var mine = window.allTasks.filter(function(t){
-    return t.stav !== 'done' && Array.isArray(t.prirazeno) && t.prirazeno.some(function(p){ return p.uid === uid; });
+    return t.stav !== 'done' && _taskVisible(t) && Array.isArray(t.prirazeno) && t.prirazeno.some(function(p){ return p.uid === uid; });
   }).length;
   var badge = document.getElementById('task-badge');
   if(!badge) return;
@@ -6907,6 +7014,7 @@ function openNewTaskModal(lat, lng, km) {
   document.getElementById('tnm-deadline').value = '';
   document.getElementById('tnm-priority').value = 'normalni';
   document.getElementById('tnm-prof').value = '';
+  document.getElementById('tnm-soukromy').checked = false;
   renderTnmPhotos();
   document.getElementById('tnm-lat').value = (lat !== null && lat !== undefined) ? lat : '';
   document.getElementById('tnm-lng').value = (lng !== null && lng !== undefined) ? lng : '';
@@ -7048,6 +7156,7 @@ function saveTaskFromForm() {
       vytvoreno:  existing ? existing.vytvoreno : Date.now(),
       upraveno:   Date.now(),
       komentare:  existing ? (existing.komentare || null) : null,
+      soukromy:   !!document.getElementById('tnm-soukromy').checked,
       photos:     photoUrls
     };
     if(!isNaN(lat) && !isNaN(lng)) {
@@ -7055,7 +7164,7 @@ function saveTaskFromForm() {
       if(!isNaN(km)) task.km = km;
     }
     saveTaskToFirebase(task, function(){
-      if(!existing) logActivity('📋','zadal úkol „'+title+'"');
+      if(!existing && !task.soukromy) logActivity('📋','zadal úkol „'+title+'"');   // soukromý úkol netEče do feedu
       closeNewTaskModal();
     });
   }
@@ -7084,6 +7193,7 @@ window.openTaskId = null;
 function openTaskDetail(id) {
   var t = window.allTasks.filter(function(x){ return x.id === id; })[0];
   if(!t) return;
+  if(!_taskVisible(t)){ showToast('🔒 Soukromý úkol – vidí ho jen zadavatel', 2500); return; }
   window.openTaskId = id;
   renderTaskDetail(t);
   document.getElementById('task-detail').classList.add('open');
@@ -7258,6 +7368,7 @@ function editTask() {
   document.getElementById('tnm-deadline').value = t.termin || '';
   document.getElementById('tnm-priority').value = t.priorita || 'normalni';
   document.getElementById('tnm-prof').value = t.profese || '';
+  document.getElementById('tnm-soukromy').checked = !!t.soukromy;
   document.getElementById('tnm-lat').value = (t.lat !== undefined && t.lat !== null) ? t.lat : '';
   document.getElementById('tnm-lng').value = (t.lng !== undefined && t.lng !== null) ? t.lng : '';
   document.getElementById('tnm-km').value  = (t.km  !== undefined && t.km  !== null) ? t.km  : '';
@@ -7335,6 +7446,7 @@ function renderTasksOnMap() {
   window.tasksLayer.clearLayers();
   var now = Date.now();
   window.allTasks.forEach(function(t){
+    if(!_taskVisible(t)) return;
     if(t.lat === undefined || t.lat === null) return;
     var isDone = t.stav === 'done';
     if(isDone && !window.taskSubLayers.done) return;
@@ -10232,6 +10344,8 @@ function copyDiaryExport(){
     <input type="text" class="task-field" id="tnm-prof" placeholder="geodet / beton / výkop / asfalt / TDS …" list="prof-suggestions">
     <datalist id="prof-suggestions"></datalist>
 
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:4px;"><input type="checkbox" id="tnm-soukromy"> 🔒 Jen můj úkol (soukromý – vidím jen já)</label>
+
     <label>Fotky (volitelně)</label>
     <div id="tnm-photos-preview" style="display:flex;flex-wrap:wrap;gap:6px;min-height:6px;"></div>
     <button type="button" class="btn-secondary" style="font-size:13px;padding:8px;cursor:pointer;border-radius:8px;" onclick="document.getElementById('tnm-photo-input').click()">📷 Přidat fotku</button>
@@ -10868,6 +10982,18 @@ function copyDiaryExport(){
   <button id="pano-prev"      class="pano-btn"           onclick="panoNav(-1)" title="Zpět (−1)">▼</button>
   <button id="pano-fast-back" class="pano-btn pano-fast" onclick="panoNav(-4)" title="Rychle zpět (−4 fotky)">⏬</button>
   <div id="pano-hint">🌐 Táhni pro rozhled · nahoru = vpřed po trase, dolů = zpět · ⏫⏬ rychle (±4), ▲▼ po jedné</div>
+</div>
+
+<div id="blok-modal" onclick="if(event.target===this)closeBlok()">
+  <div class="rz-card">
+    <div class="rz-top"><h3>📝 Poznámkový blok</h3><button class="rz-x" onclick="closeBlok()">✕</button></div>
+    <div class="rz-compose">
+      <textarea id="blok-text" maxlength="2000" placeholder="Napiš si poznámku (jen pro tebe, nebo zveřejni týmu)…"></textarea>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text2);margin-bottom:8px;"><input type="checkbox" id="blok-verejne"> 🌐 Veřejná (uvidí ji celý tým)</label>
+      <button class="rz-send" onclick="addBlok()">＋ Přidat poznámku</button>
+    </div>
+    <div id="blok-list" class="rz-list"></div>
+  </div>
 </div>
 
 <div id="rozhlas-modal" onclick="if(event.target===this)closeRozhlas()">
