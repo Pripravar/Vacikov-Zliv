@@ -893,6 +893,12 @@ textarea.note-field { min-height:80px; resize:vertical; }
 #pano-fast-back { bottom:7%; }
 #pano-hint { position:absolute; bottom:16px; left:50%; transform:translateX(-50%); z-index:7010; background:rgba(0,0,0,.55); color:#fff; font-size:12px; padding:6px 12px; border-radius:16px; pointer-events:none; white-space:nowrap; }
 .pano-arrow-hs { color:#fff; font-size:34px; text-shadow:0 2px 6px rgba(0,0,0,.8); cursor:pointer; transform:translate(-50%,-50%); filter:drop-shadow(0 0 3px #8e24aa); }
+/* 🧭 minimapka v rohu 360° prohlížeče */
+#pano-minimap { position:absolute; left:14px; bottom:16px; width:132px; height:132px; z-index:7020; border-radius:10px; overflow:hidden; border:2px solid rgba(255,255,255,.55); box-shadow:0 2px 12px rgba(0,0,0,.55); }
+#pano-mini-map { width:100%; height:100%; background:#0f3460; }
+#pano-mini-cone { position:absolute; left:50%; top:50%; width:64px; height:64px; transform:translate(-50%,-50%); transform-origin:center center; pointer-events:none; z-index:3; }
+#pano-mini-cone svg { width:100%; height:100%; overflow:visible; display:block; }
+@media (max-width:420px){ #pano-minimap { width:108px; height:108px; } }
 
 /* Panel úkolů – posuvný shora */
 #tasks-panel { position:fixed; top:0; left:0; right:0; bottom:0; z-index:3500; background:var(--bg); display:none; flex-direction:column; }
@@ -3891,8 +3897,53 @@ function panoNav(delta){
 function closePano360(){
   document.getElementById('pano-modal').classList.remove('open');
   if(window._panoViewer){ try{ window._panoViewer.destroy(); }catch(e){} window._panoViewer=null; }
+  _panoMiniStopCompass();
   window._panoCurId=null;
 }
+
+// ── 🧭 Minimapka v 360° prohlížeči (Street View styl; #91) ──
+window._panoMini=null; window._panoMiniLayer=null; window._panoMiniRaf=null;
+function _panoMiniInit(){
+  if(window._panoMini) return window._panoMini;
+  var el=document.getElementById('pano-mini-map'); if(!el || typeof L==='undefined') return null;
+  var m=L.map(el,{ zoomControl:false, attributionControl:false, dragging:false, scrollWheelZoom:false,
+    doubleClickZoom:false, boxZoom:false, keyboard:false, touchZoom:false, tap:false, inertia:false });
+  L.tileLayer('https://api.mapy.cz/v1/maptiles/outdoor/256/{z}/{x}/{y}?apikey='+MAPY_API_KEY, {maxZoom:20, maxNativeZoom:20}).addTo(m);
+  window._panoMini=m; window._panoMiniLayer=L.layerGroup().addTo(m);
+  return m;
+}
+function _panoMiniUpdate(rec){
+  var m=_panoMiniInit(); if(!m || typeof rec.lat!=='number') return;
+  window._panoMiniLayer.clearLayers();
+  var col=_panoGroupColor(window._panoCurSkupina);
+  var arr=_panoSortedGroup(window._panoCurSkupina);
+  var pts=arr.filter(function(o){return typeof o.lat==='number' && typeof o.lng==='number';}).map(function(o){return [o.lat,o.lng];});
+  if(pts.length>1) L.polyline(pts,{color:col,weight:3,opacity:.9,interactive:false}).addTo(window._panoMiniLayer);
+  L.circleMarker([rec.lat,rec.lng],{radius:5,color:'#fff',weight:2,fillColor:col,fillOpacity:1,interactive:false}).addTo(window._panoMiniLayer);
+  m.setView([rec.lat,rec.lng],17,{animate:false});
+  setTimeout(function(){ try{ m.invalidateSize(); m.setView([rec.lat,rec.lng],17,{animate:false}); }catch(e){} }, 60);   // fixní overlay → invalidateSize!
+}
+function _panoAzimut(rec){
+  if(rec && rec.bearingNext!=null) return rec.bearingNext;
+  var arr=_panoSortedGroup(window._panoCurSkupina);
+  for(var i=arr.length-1;i>=0;i--){ if(arr[i].bearingNext!=null) return arr[i].bearingNext; }
+  return 0;
+}
+function _panoMiniStartCompass(rec){
+  _panoMiniStopCompass();
+  var cone=document.getElementById('pano-mini-cone'); if(!cone) return;
+  var az=_panoAzimut(rec);
+  function tick(){
+    try{
+      var yaw = (window._panoViewer && window._panoViewer.getYaw) ? window._panoViewer.getYaw() : PANO_INIT_YAW;
+      var bearing = az + (yaw - PANO_INIT_YAW);   // absolutní směr pohledu
+      cone.style.transform = 'translate(-50%,-50%) rotate('+bearing+'deg)';
+    }catch(e){}
+    window._panoMiniRaf = requestAnimationFrame(tick);
+  }
+  window._panoMiniRaf = requestAnimationFrame(tick);
+}
+function _panoMiniStopCompass(){ if(window._panoMiniRaf){ cancelAnimationFrame(window._panoMiniRaf); window._panoMiniRaf=null; } }
 document.addEventListener('keydown', function(e){
   if(!document.getElementById('pano-modal') || !document.getElementById('pano-modal').classList.contains('open')) return;
   if(e.key==='ArrowRight') panoNav(e.shiftKey?4:1);
@@ -11444,6 +11495,10 @@ function copyDiaryExport(){
   <button id="pano-prev"      class="pano-btn"           onclick="panoNav(-1)" title="Zpět (−1)">▼</button>
   <button id="pano-fast-back" class="pano-btn pano-fast" onclick="panoNav(-4)" title="Rychle zpět (−4 fotky)">⏬</button>
   <div id="pano-hint">🌐 Táhni pro rozhled · nahoru = vpřed po trase, dolů = zpět · ⏫⏬ rychle (±4), ▲▼ po jedné</div>
+  <div id="pano-minimap">
+    <div id="pano-mini-map"></div>
+    <div id="pano-mini-cone"><svg viewBox="-30 -30 60 60"><path d="M0,0 L-13,-26 L13,-26 Z" fill="rgba(30,120,255,.35)" stroke="#1e78ff" stroke-width="1.5"/><circle cx="0" cy="0" r="3.5" fill="#1e78ff" stroke="#fff" stroke-width="1.5"/></svg></div>
+  </div>
 </div>
 
 <div id="body-modal" onclick="if(event.target===this)closeBody()">
