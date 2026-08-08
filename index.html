@@ -3868,6 +3868,7 @@ function openPano360(id){
     var el=document.getElementById(p[0]); if(el) el.style.visibility=p[1]?'hidden':'visible';
   });
   if(info) info.textContent='🌐 '+_esc(window._panoCurSkupina)+(kmStr?(' · '+kmStr):'')+(_idx>=0?(' · '+(_idx+1)+'/'+_arr.length):'');
+  _panoMiniUpdate(rec); _panoMiniStartCompass(rec);
   resolveFileUrl(rec.path).then(function(url){
     if(!url){ showToast('❌ Panorama se nenačetlo',2500); return; }
     if(window._panoViewer){ try{ window._panoViewer.destroy(); }catch(e){} window._panoViewer=null; }
