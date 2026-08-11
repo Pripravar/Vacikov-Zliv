@@ -777,6 +777,11 @@ textarea.note-field { min-height:80px; resize:vertical; }
 .gallery-sub-badge { position:absolute; top:4px; right:4px; background:#1565c0; color:#fff; font-size:9px; font-weight:800; letter-spacing:.5px; padding:2px 6px; border-radius:6px; z-index:3; box-shadow:0 1px 3px rgba(0,0,0,.4); }
 .gallery-shared-badge { position:absolute; top:4px; right:4px; background:#10b981; color:#fff; font-size:9px; font-weight:800; letter-spacing:.3px; padding:2px 6px; border-radius:6px; z-index:3; box-shadow:0 1px 3px rgba(0,0,0,.4); }
 .gallery-shared-badge-inv { background:#8b5cf6; }
+/* zdroj fotky (samostatné) – vlevo nahoře, jantar=import, tyrkys=app; schová se v režimu výběru (kolize s ✓) */
+.gallery-src-badge { position:absolute; top:4px; left:4px; font-size:11px; line-height:1; padding:2px 5px; border-radius:6px; z-index:2; box-shadow:0 1px 3px rgba(0,0,0,.45); }
+.gallery-src-badge.src-import { background:#f59e0b; }
+.gallery-src-badge.src-app { background:#0891b2; }
+#gallery-grid.selectmode .gallery-src-badge { display:none; }
 /* čekání na schválení admina + zvýraznění čekajícího v adminu */
 #pending-approval { display:none; position:fixed; inset:0; z-index:99998; background:rgba(10,15,30,.97); align-items:center; justify-content:center; padding:24px; }
 #pending-approval.show { display:flex; }
@@ -1340,8 +1345,12 @@ document.addEventListener('touchend', function(e){
   </div>
   <h3>📷 Fotky</h3>
   <div class="layer-row">
-    <label>🏷️ Razítko (km, datum, jméno)</label>
+    <label>🏷️ Razítko (stavba, km, datum, jméno)</label>
     <label class="toggle"><input type="checkbox" id="lyr-stamp" onchange="onStampToggle(this.checked)"><span class="toggle-slider"></span></label>
+  </div>
+  <div class="layer-row" style="padding-left:12px;">
+    <label style="font-size:12px;">↳ 🔤 Autor jako iniciály (místo celého jména)</label>
+    <label class="toggle"><input type="checkbox" id="lyr-stamp-initials" onchange="onStampInitialsToggle(this.checked)"><span class="toggle-slider"></span></label>
   </div>
 </div>
 
@@ -4103,10 +4112,42 @@ function onStampToggle(checked) {
   setStampPref(checked);
   showToast(checked ? '🏷️ Razítko zapnuto' : '🏷️ Razítko vypnuto', 1500);
 }
+// Název stavby do razítka (beruška: víc staveb) + volba autora celé jméno / iniciály
+var STAMP_STAVBA = 'II/176 Vacíkov–Zliv';
+function getStampInitials(){ return localStorage.getItem('stampAuthorInitials') === '1'; }
+function onStampInitialsToggle(checked){
+  localStorage.setItem('stampAuthorInitials', checked ? '1' : '0');
+  showToast(checked ? '🔤 Razítko: iniciály' : '🔤 Razítko: celé jméno', 1500);
+}
+function _stampAuthorText(author){
+  if(getStampInitials()){ try{ return _authorInitials(author) || author || ''; }catch(e){ return author||''; } }
+  return author || '';
+}
+// Vypálí razítkový box (název stavby + km/datum + autor) do pravého dolního rohu.
+function _drawStamp(ctx, img, km, dateStr, author){
+  var lines = [ STAMP_STAVBA, 'km ' + (km || '-') + '   •   ' + dateStr, _stampAuthorText(author) ].filter(function(s){ return s; });
+  var fontSize = Math.max(20, Math.round(img.width / 40));
+  var pad = Math.round(fontSize * 0.6), lineH = Math.round(fontSize * 1.45);
+  ctx.font = 'bold ' + fontSize + 'px Arial, sans-serif';
+  var textW = 0; lines.forEach(function(s){ textW = Math.max(textW, ctx.measureText(s).width); });
+  var boxW = textW + pad * 2, boxH = lineH * lines.length + pad;
+  var boxX = img.width - boxW - pad, boxY = img.height - boxH - pad;
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  if(ctx.roundRect){ ctx.beginPath(); ctx.roundRect(boxX, boxY, boxW, boxH, 6); ctx.fill(); }
+  else { ctx.fillRect(boxX, boxY, boxW, boxH); }
+  lines.forEach(function(s, i){
+    if(i === 0){ ctx.font = 'bold ' + Math.round(fontSize*0.82) + 'px Arial, sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.92)'; }
+    else if(i === lines.length-1){ ctx.font = fontSize + 'px Arial, sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.88)'; }
+    else { ctx.font = 'bold ' + fontSize + 'px Arial, sans-serif'; ctx.fillStyle = '#ffffff'; }
+    ctx.fillText(s, boxX + pad, boxY + lineH * (i + 0.85));
+  });
+}
 // Při načtení synchronizuj stav layers toggle s preferencí
 window.addEventListener('load', function(){
   var t = document.getElementById('lyr-stamp');
   if(t) t.checked = getStampPref();
+  var ti = document.getElementById('lyr-stamp-initials');
+  if(ti) ti.checked = getStampInitials();
 });
 
 function selectCat(idx) {
@@ -4181,26 +4222,7 @@ function burnInMetadata(dataUrl, km, author, callback) {
     ctx.drawImage(img, 0, 0);
     var _now = new Date();
     var dnes = _now.toLocaleDateString('cs-CZ') + ' ' + _now.toLocaleTimeString('cs-CZ', {hour:'2-digit', minute:'2-digit'});
-    var line1 = 'km ' + (km || '-') + '   •   ' + dnes;
-    var line2 = author || '';
-    var fontSize = Math.max(20, Math.round(img.width / 40));
-    ctx.font = 'bold ' + fontSize + 'px Arial, sans-serif';
-    var pad = Math.round(fontSize * 0.6);
-    var lineH = Math.round(fontSize * 1.45);
-    var textW = Math.max(ctx.measureText(line1).width, ctx.measureText(line2).width);
-    var boxW = textW + pad * 2;
-    var boxH = lineH * 2 + pad;
-    var boxX = img.width - boxW - pad;
-    var boxY = img.height - boxH - pad;
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    if(ctx.roundRect) { ctx.beginPath(); ctx.roundRect(boxX, boxY, boxW, boxH, 6); ctx.fill(); }
-    else { ctx.fillRect(boxX, boxY, boxW, boxH); }
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold ' + fontSize + 'px Arial, sans-serif';
-    ctx.fillText(line1, boxX + pad, boxY + lineH * 0.85);
-    ctx.font = fontSize + 'px Arial, sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.88)';
-    ctx.fillText(line2, boxX + pad, boxY + lineH * 1.88);
+    _drawStamp(ctx, img, km, dnes, author);
     callback(canvas.toDataURL('image/jpeg', 0.88));
   };
   img.src = dataUrl;
@@ -4739,26 +4761,7 @@ function burnInMetadataWithDate(dataUrl, km, author, dateObj, callback) {
     var ctx = canvas.getContext('2d');
     ctx.drawImage(img, 0, 0);
     var dStr = dateObj.toLocaleDateString('cs-CZ') + ' ' + dateObj.toLocaleTimeString('cs-CZ', {hour:'2-digit', minute:'2-digit'});
-    var line1 = 'km ' + (km || '-') + '   •   ' + dStr;
-    var line2 = author || '';
-    var fontSize = Math.max(20, Math.round(img.width / 40));
-    ctx.font = 'bold ' + fontSize + 'px Arial, sans-serif';
-    var pad = Math.round(fontSize * 0.6);
-    var lineH = Math.round(fontSize * 1.45);
-    var textW = Math.max(ctx.measureText(line1).width, ctx.measureText(line2).width);
-    var boxW = textW + pad * 2;
-    var boxH = lineH * 2 + pad;
-    var boxX = img.width - boxW - pad;
-    var boxY = img.height - boxH - pad;
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    if(ctx.roundRect) { ctx.beginPath(); ctx.roundRect(boxX, boxY, boxW, boxH, 6); ctx.fill(); }
-    else { ctx.fillRect(boxX, boxY, boxW, boxH); }
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold ' + fontSize + 'px Arial, sans-serif';
-    ctx.fillText(line1, boxX + pad, boxY + lineH * 0.85);
-    ctx.font = fontSize + 'px Arial, sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.88)';
-    ctx.fillText(line2, boxX + pad, boxY + lineH * 1.88);
+    _drawStamp(ctx, img, km, dStr, author);
     callback(canvas.toDataURL('image/jpeg', 0.9));
   };
   img.onerror = function(){ callback(dataUrl); }; // při selhání vrátí beze změny
@@ -6274,7 +6277,7 @@ function _importFotoProcess(files, batchSo){
       if(lat!=null){ try{ km = fmtKm(gpxCumToRealKm(nearestOnRoute(lat,lng).cum)); }catch(e){} }
       // 2) komprese + zařazení do fronty na pozadí (stejná cesta jako focení)
       compressImage(orig, function(compressed){
-        enqueuePhoto({ compressed: compressed, meta: {km:km, author:author, lat:lat, lng:lng, so:batchSo}, yes:true });
+        enqueuePhoto({ compressed: compressed, meta: {km:km, author:author, lat:lat, lng:lng, so:batchSo, src:'import'}, yes:true });
         enq++; pending--;
         if(pending<=0) showToast('📥 Zařazeno '+enq+' fotek do nahrávání'+(skip?(' ('+skip+' přeskočeno)'):''), 2800);
       });
@@ -6338,6 +6341,7 @@ function ppAnswer(yes) {
     // PLYNULÉ FOCENÍ: fotku zařadíme do fronty a HNED nabídneme další snímek.
     // Vlastní razítkování + upload obou verzí + miniatura + zápis do DB běží na
     // pozadí v _processPhotoQueue() (sekvenčně, s odznakem „⏳ Nahrávám N…").
+    if(meta && !meta.src) meta.src = 'app';   // focené přímo aplikací
     enqueuePhoto({ compressed: compressed, meta: meta, yes: !!yes });
     sess.count++;
     _showContinuePrompt();
@@ -6429,6 +6433,7 @@ function _uploadPhotoJob(job, done){
           };
           if(urlOrig)  entry.urlOriginal = urlOrig;
           if(urlStamp) entry.urlStamped  = urlStamp;
+          if(meta.src) entry.zdrojFoto = meta.src;   // 'app' = focené appkou, 'import' = z galerie telefonu
           var key = String(t);
           var visibleSrc = yes ? stampedDataUrl : compressed;
           function _saveStandalone(){
@@ -6661,6 +6666,14 @@ function _galleryItemEl(item) {
   meta.className = 'gallery-item-meta';
   meta.textContent = (item.km ? 'km ' + item.km : '') + (item.km && (item.date || item.author) ? ' • ' : '') + (item.date || '') + (item.date && item.author ? ' • ' : '') + (item.author || '');
   div.appendChild(meta);
+  // Zdroj fotky (jen samostatné): 📸 focené appkou / 📥 import z telefonu — vlevo nahoře, jiné barvy než SUB/TDS
+  if(!item.noteId && item.zdrojFoto){
+    var srcB = document.createElement('div');
+    srcB.className = 'gallery-src-badge ' + (item.zdrojFoto==='import' ? 'src-import' : 'src-app');
+    srcB.textContent = (item.zdrojFoto==='import' ? '📥' : '📸');
+    srcB.title = (item.zdrojFoto==='import' ? 'Import z telefonu' : 'Focené aplikací');
+    div.appendChild(srcB);
+  }
   // Odznaky/rámečky sdílení SUB/TDS
   if(item.zdroj === 'SUB' || item.sub){
     div.classList.add('gallery-sub');
@@ -7114,6 +7127,17 @@ function toggleUserAdmin(uid, mk){
 function _topBy(map){
   return Object.keys(map).map(function(k){return {k:k,n:map[k]};}).sort(function(a,b){return b.n-a.n;}).slice(0,6);
 }
+// Statistika: rozpad UŽIVATEL × FUNKCE (z evidence akcí /statistiky_uzivatele, dle skillu).
+var STAT_ACTS = [
+  ['ukol_hotovo',   '✅', 'Úkoly hotové'],
+  ['ukol_prevzato', '🙋', 'Úkoly převzaté'],
+  ['denik_zapis',   '📓', 'Deník'],
+  ['mereni_ulozeno','📏', 'Měření'],
+  ['pin',           '📍', 'Poznámky/piny'],
+  ['foto_ulozeno',  '📷', 'Fotky'],
+  ['foto_komentar', '💬', 'Komentáře'],
+  ['sdileni_sub',   '🔗', 'Sdílení SUB/TDS']
+];
 function openStats(){
   if(!isAdmin()){ _permDenied(); return; }
   var fotky=window.standaloneData||{}, fk=Object.keys(fotky);
@@ -7123,27 +7147,46 @@ function openStats(){
   var vykCount=0; Object.keys(vyk).forEach(function(so){ vykCount+=Object.keys(vyk[so]||{}).length; });
   var uOpen=0,uProg=0,uDone=0;
   ukoly.forEach(function(t){ if(t.stav==='done')uDone++; else if(t.stav==='inprogress')uProg++; else uOpen++; });
-  // nejaktivnější (autor fotek + poznámek + úkolů)
-  var akt={};
-  fk.forEach(function(k){ var a=(fotky[k]||{}).author; if(a) akt[a]=(akt[a]||0)+1; });
-  pozn.forEach(function(n){ if(n.author) akt[n.author]=(akt[n.author]||0)+1; });
-  ukoly.forEach(function(t){ if(t.zadalName) akt[t.zadalName]=(akt[t.zadalName]||0)+1; });
   var users=Object.keys(window.allUsers||{}).filter(function(u){ var x=window.allUsers[u]; return x&&x.name; }).length;
   var online=Object.keys(window.allUsers||{}).filter(function(u){ var x=window.allUsers[u]; return x&&x.lastSeen&&(Date.now()-x.lastSeen<5*60000); }).length;
-  var rows=[
+  var tiles=[
     ['📷 Fotky', fk.length],
     ['📝 Poznámky', pozn.length],
-    ['✅ Úkoly celkem', ukoly.length + '  ('+uOpen+' otevřené · '+uProg+' řeší se · '+uDone+' hotové)'],
+    ['✅ Úkoly', ukoly.length + '  ('+uOpen+'/'+uProg+'/'+uDone+')'],
     ['📏 Měření', Object.keys(mer).length],
-    ['📄 Nahrané výkresy/PDF', vykCount],
+    ['📄 Výkresy/PDF', vykCount],
     ['👥 Uživatelé', users + '  ('+online+' online)']
   ];
-  var box=document.getElementById('stats-body');
-  box.innerHTML = '<div class="stats-grid">'+rows.map(function(r){
+  // rozpad z /statistiky_uzivatele: řádek = uživatel, sloupec = funkce
+  var sd=window.statsData||{};
+  var rows=Object.keys(sd).map(function(uid){
+    var r=sd[uid]||{}, ak=r.akce||{};
+    var name=(window.allUsers[uid]&&window.allUsers[uid].name)||r.name||'—';
+    var cells={}, tot=0;
+    STAT_ACTS.forEach(function(a){ var n=ak[a[0]]||0; cells[a[0]]=n; tot+=n; });
+    return {name:name, cells:cells, tot:tot};
+  }).filter(function(r){ return r.tot>0; }).sort(function(a,b){ return b.tot-a.tot; });
+  var colTot={}, grand=0; STAT_ACTS.forEach(function(a){ colTot[a[0]]=0; });
+  rows.forEach(function(r){ STAT_ACTS.forEach(function(a){ colTot[a[0]]+=r.cells[a[0]]; grand+=r.cells[a[0]]; }); });
+
+  var html='<div class="stats-grid">'+tiles.map(function(r){
     return '<div class="stat-tile"><div class="stat-n">'+r[1]+'</div><div class="stat-l">'+r[0]+'</div></div>';
-  }).join('')+'</div>'+
-  '<div style="font-size:11px;color:var(--text2);text-transform:uppercase;margin:14px 0 6px;">🏆 Nejaktivnější (fotky + poznámky + úkoly)</div>'+
-  (_topBy(akt).length? _topBy(akt).map(function(x){ return '<div class="stat-rank"><span>'+escapeHtml(x.k)+'</span><b>'+x.n+'</b></div>'; }).join('') : '<div style="color:var(--text2);font-size:13px;">Zatím žádná aktivita.</div>');
+  }).join('')+'</div>';
+  html+='<div class="st-h">👤 Podle uživatelů × 🧩 funkcí</div>';
+  if(!rows.length){
+    html+='<div style="color:var(--text2);font-size:13px;">Zatím žádná zaznamenaná aktivita.</div>';
+  } else {
+    html+='<div style="overflow-x:auto;"><table class="st-tab"><thead><tr><th style="text-align:left;">Uživatel</th>'+
+      STAT_ACTS.map(function(a){ return '<th title="'+a[2]+'">'+a[1]+'</th>'; }).join('')+'<th>Σ</th></tr></thead><tbody>'+
+      rows.map(function(r){ return '<tr><td style="text-align:left;">'+escapeHtml(r.name)+'</td>'+
+        STAT_ACTS.map(function(a){ var n=r.cells[a[0]]; return '<td>'+(n||'·')+'</td>'; }).join('')+
+        '<td><b>'+r.tot+'</b></td></tr>'; }).join('')+
+      '</tbody><tfoot><tr><td style="text-align:left;">Σ funkce</td>'+
+        STAT_ACTS.map(function(a){ return '<td><b>'+(colTot[a[0]]||0)+'</b></td>'; }).join('')+
+        '<td><b>'+grand+'</b></td></tr></tfoot></table></div>'+
+      '<div style="font-size:11px;color:var(--text2);margin-top:6px;">Řádky = uživatelé · sloupce = funkce · najeď na ikonu sloupce pro název. Z evidence akcí (od zavedení žebříčku).</div>';
+  }
+  document.getElementById('stats-body').innerHTML=html;
   document.getElementById('stats-modal').classList.add('open');
 }
 function closeStats(){ document.getElementById('stats-modal').classList.remove('open'); }
@@ -11809,6 +11852,12 @@ function copyDiaryExport(){
 .stat-n{font-size:20px;font-weight:800;color:var(--accent2,#e6b400);}
 .stat-l{font-size:12px;color:var(--text2,#a0aec0);margin-top:3px;}
 .stat-rank{display:flex;justify-content:space-between;padding:6px 8px;border-bottom:1px solid var(--border,#2d2d44);font-size:13px;}
+.st-h{font-size:11px;color:var(--text2,#a0aec0);text-transform:uppercase;margin:14px 0 6px;font-weight:700;}
+.st-tab{border-collapse:collapse;width:100%;font-size:12px;white-space:nowrap;}
+.st-tab th,.st-tab td{padding:5px 8px;text-align:center;border-bottom:1px solid var(--border,#2d2d44);}
+.st-tab thead th{color:var(--text2,#a0aec0);font-weight:700;}
+.st-tab tbody td{color:var(--text,#e8e8f0);}
+.st-tab tfoot td{border-top:2px solid var(--border,#2d2d44);border-bottom:none;color:var(--accent2,#e6b400);}
 </style>
 <div id="stats-modal" onclick="if(event.target===this)closeStats()">
   <div class="st-card">
