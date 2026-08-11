@@ -1355,7 +1355,7 @@ document.addEventListener('touchend', function(e){
 </div>
 <button id="btn-measure" class="fab-sub" onclick="closeFabMore();startMeasure()" title="Měření na mapě">📏</button>
 <div id="measure-hud">
-  <div id="measure-readout">Najeď křížkem a ➕ Bod · nebo 📍 Moje poloha (za jízdy)</div>
+  <div id="measure-readout">Najeď křížkem a ➕ Bod · nebo ➕ bod na mé poloze (za jízdy)</div>
   <div class="mh-types">
     <button id="mtype-vzdalenost" onclick="setMeasureType('vzdalenost')">📏 Vzdálenost</button>
     <button id="mtype-obvod" onclick="setMeasureType('obvod')">⬡ Obvod</button>
@@ -1364,7 +1364,7 @@ document.addEventListener('touchend', function(e){
   </div>
   <div class="mh-btns">
     <button class="mh-add" onclick="measureAddPoint()">➕ Bod</button>
-    <button class="mh-gps" onclick="measureAddGpsPoint()" title="Ulož bod na mou aktuální GPS polohu (jízda autem)">📍 Moje poloha</button>
+    <button class="mh-gps" onclick="measureAddGpsPoint()" title="Ulož bod na mou aktuální GPS polohu (jízda autem)">➕ bod na mé poloze</button>
     <button onclick="measureUndo()">↩️ Zpět</button>
     <button onclick="measureClear()">🗑 Vyčistit</button>
     <button class="mh-save" onclick="measureSave()">💾 Uložit</button>
@@ -3675,13 +3675,26 @@ function measureAddPoint(){
   redrawMeasure();
 }
 // Přidá bod na AKTUÁLNÍ GPS polohu (měření za jízdy autem – stiskni na každém místě, kde chceš bod).
+function _measurePulse(lat,lng){
+  try{
+    var m=L.circleMarker([lat,lng],{radius:8,color:'#22c55e',weight:3,fillColor:'#22c55e',fillOpacity:.5,interactive:false}).addTo(map);
+    var r=8; var iv=setInterval(function(){ r+=3; m.setRadius(r); m.setStyle({opacity:Math.max(0,1-(r-8)/26), fillOpacity:Math.max(0,.5-(r-8)/40)}); if(r>32){ clearInterval(iv); map.removeLayer(m); } }, 40);
+  }catch(e){}
+}
 function measureAddGpsPoint(){
   function add(lat,lng){
     if(measureType==='bod'){ measurePts=[[lat,lng]]; }
     else measurePts.push([lat,lng]);
-    if(navigator.vibrate) navigator.vibrate(30);
+    if(navigator.vibrate) navigator.vibrate([40,60,40]);
     redrawMeasure();
-    showToast('📍 Bod '+measurePts.length+' přidán', 900);
+    // přesuň mapu (a tím křížek) na mou polohu → hned vidím, kam se bod uložil
+    window._gpsSelfMove=true; map.setView([lat,lng], map.getZoom()); setTimeout(function(){ window._gpsSelfMove=false; },0);
+    _measurePulse(lat,lng);
+    var extra='';
+    if(measureType==='vzdalenost' && measurePts.length>=2) extra=' · '+fmtLen(_measureLenM(measurePts,false));
+    else if(measureType==='obvod' && measurePts.length>=2) extra=' · obvod '+fmtLen(_measureLenM(measurePts,true));
+    else if(measureType==='plocha' && measurePts.length>=3) extra=' · '+fmtArea(_measureAreaM2(measurePts));
+    showToast('✅ Uložen bod č. '+measurePts.length+extra, 2000);
   }
   // GPS už běží → poslední známá poloha je okamžitá (ideální za jízdy)
   if(gpsActive && gpsMarker){ var ll=gpsMarker.getLatLng(); add(ll.lat, ll.lng); return; }
