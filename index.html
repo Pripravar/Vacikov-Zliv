@@ -3375,7 +3375,8 @@ function renderHlaseniInbox(){
 }
 function resolveHlaseni(id){
   if(!isAdmin()) return;
-  var txt=prompt('Jak bylo vyřešeno? (stručně – uvidí to autor)', '');
+  var cur=(window.hlaseniData||{})[id]||{};
+  var txt=prompt('Jak bylo vyřešeno? (stručně – uvidí to autor)', cur.vyreseniText||'');
   if(txt===null) return;
   db.ref('hlaseni/'+id).update({ stav:'vyreseno', vyreseniText:txt.trim(), vyreseniTs:Date.now(),
     vyreseniBy:(window.currentUser&&window.currentUser.name)||'admin' });
