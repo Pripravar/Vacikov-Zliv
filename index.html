@@ -118,7 +118,9 @@ body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui
 #btn-fabmore { bottom:144px; font-size:26px; transition:transform .25s; }
 body.fab-open #btn-fabmore { transform:rotate(90deg); background:var(--accent); color:#fff; }
 #btn-home-fab { left:16px; right:auto; bottom:24px; }
-#btn-report { position:fixed; left:0; top:50%; transform:translateY(-50%); z-index:9600; width:40px; height:46px; border-radius:0 12px 12px 0; background:var(--panel2); border:1px solid var(--border); border-left:none; color:var(--text); font-size:20px; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:2px 2px 10px rgba(0,0,0,.4); }
+#btn-report { position:fixed; left:0; top:50%; transform:translateY(-50%); z-index:9600; width:40px; height:46px; border-radius:0 12px 12px 0; background:var(--panel2); border:1px solid var(--border); border-left:none; color:var(--text); font-size:20px; cursor:grab; display:flex; align-items:center; justify-content:center; box-shadow:2px 2px 10px rgba(0,0,0,.4); touch-action:none; }
+#btn-report.dragging { cursor:grabbing; opacity:.85; box-shadow:0 6px 18px rgba(0,0,0,.55); }
+#btn-report.free { border-radius:12px; border-left:1px solid var(--border); }
 #btn-report .task-badge { position:absolute; top:-4px; right:-6px; background:#e53e3e; color:#fff; font-size:10px; font-weight:700; border-radius:9px; padding:1px 5px; min-width:16px; text-align:center; display:none; }
 #btn-report .task-badge.show { display:block; }
 /* 🗂️ FAB ciferník (všechny panely z lišty) */
@@ -1333,7 +1335,7 @@ document.addEventListener('touchend', function(e){
 <button id="btn-foto-fab" onclick="takeStandalonePhoto()" title="Vyfotit">📷</button>
 <button id="btn-fabmore" onclick="toggleFabMore()" title="Další nástroje">⋯</button>
 <button id="btn-home-fab" onclick="resetMapView()" title="Domů – celá trasa">⌂</button>
-<button id="btn-report" onclick="openReport()" title="Nahlásit chybu / vylepšení">🐞<span id="report-badge" class="task-badge">0</span></button>
+<button id="btn-report" onclick="openReport()" title="Nahlásit chybu / vylepšení (táhni = přesun)">🐞<span id="report-badge" class="task-badge">0</span></button>
 <button id="btn-fabgrid" onclick="toggleFabGrid()" title="Všechny panely (listuj)">🗂️</button>
 <button id="fabgrid-0" class="fabgrid-slot" onclick="fabgridSlotClick(0)"></button>
 <button id="fabgrid-1" class="fabgrid-slot" onclick="fabgridSlotClick(1)"></button>
@@ -3317,6 +3319,61 @@ function openReport(){
   _markHlaseniSeen();
 }
 function closeReport(){ document.getElementById('hlaseni-modal').classList.remove('open'); }
+
+// ── 🐞 Plovoucí beruška: přesouvatelná taháním, poloha se pamatuje (localStorage) ──
+function _applyBeruskaPos(){
+  var b=document.getElementById('btn-report'); if(!b) return;
+  var raw; try{ raw=localStorage.getItem('beruskaPos'); }catch(e){}
+  if(!raw){ return; }                 // beze změny = výchozí kotva vlevo uprostřed
+  var p; try{ p=JSON.parse(raw); }catch(e){ return; }
+  if(!p || typeof p.left!=='number' || typeof p.top!=='number') return;
+  var w=b.offsetWidth||40, h=b.offsetHeight||46, m=2;
+  var maxL=Math.max(m, window.innerWidth - w - m), maxT=Math.max(m, window.innerHeight - h - m);
+  var L=Math.min(Math.max(m,p.left),maxL), T=Math.min(Math.max(m,p.top),maxT);
+  b.classList.add('free');
+  b.style.transform='none'; b.style.right='auto'; b.style.bottom='auto';
+  b.style.left=L+'px'; b.style.top=T+'px';
+}
+(function _initBeruskaDrag(){
+  function bind(){
+    var b=document.getElementById('btn-report'); if(!b) return;
+    _applyBeruskaPos();
+    var downX=0,downY=0,offX=0,offY=0,moved=false,dragging=false;
+    b.addEventListener('pointerdown',function(e){
+      if(e.button!=null && e.button!==0) return;
+      var r=b.getBoundingClientRect();
+      downX=e.clientX; downY=e.clientY; offX=e.clientX-r.left; offY=e.clientY-r.top;
+      moved=false; dragging=true;
+      try{ b.setPointerCapture(e.pointerId); }catch(_){}
+    });
+    b.addEventListener('pointermove',function(e){
+      if(!dragging) return;
+      var dx=e.clientX-downX, dy=e.clientY-downY;
+      if(!moved){ if(Math.abs(dx)+Math.abs(dy) < 8) return; moved=true; b.classList.add('dragging','free'); }
+      e.preventDefault();
+      var w=b.offsetWidth, h=b.offsetHeight, m=2;
+      var L=Math.min(Math.max(m, e.clientX-offX), window.innerWidth - w - m);
+      var T=Math.min(Math.max(m, e.clientY-offY), window.innerHeight - h - m);
+      b.style.transform='none'; b.style.right='auto'; b.style.bottom='auto';
+      b.style.left=L+'px'; b.style.top=T+'px';
+    });
+    function up(e){
+      if(!dragging) return; dragging=false; b.classList.remove('dragging');
+      try{ b.releasePointerCapture(e.pointerId); }catch(_){}
+      if(moved){
+        window._beruskaMoved=true;              // potlač následný klik (ať neotevře hlášení)
+        setTimeout(function(){ window._beruskaMoved=false; }, 50);
+        try{ localStorage.setItem('beruskaPos', JSON.stringify({ left:parseInt(b.style.left,10), top:parseInt(b.style.top,10) })); }catch(_){}
+      }
+    }
+    b.addEventListener('pointerup',up);
+    b.addEventListener('pointercancel',up);
+    // tah = přesun, ne otevření hlášení
+    b.addEventListener('click',function(e){ if(window._beruskaMoved){ e.preventDefault(); e.stopImmediatePropagation(); } }, true);
+    window.addEventListener('resize', _applyBeruskaPos);
+  }
+  if(document.readyState!=='loading') bind(); else document.addEventListener('DOMContentLoaded', bind);
+})();
 function setReportTyp(t){
   window._reportTyp=t;
   document.getElementById('hl-typ-chyba').classList.toggle('active', t==='chyba');
