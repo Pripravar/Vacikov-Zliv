@@ -1831,6 +1831,9 @@ function initMap() {
   });
 
   map.on('dragstart',function(){gpsCentering=false;});
+  // Jakýkoli pohyb mapy, který NEZpůsobilo naše GPS sledování (tlačítko ⌂, skok na úkol/pin/měření,
+  // pinch, kolečko…), vypne auto-centrování – jinak GPS během pár sekund stáhne pohled zpět na polohu.
+  map.on('movestart',function(){ if(!window._gpsSelfMove) gpsCentering=false; });
   map.on('click',function(){closeLayersPanel();});
 
   // Při touch na PDF/prop panelu - vypni Leaflet aby nepřebíral pinch-zoom
@@ -2483,12 +2486,12 @@ function updateGPS(lat,lng) {
   else{gpsMarker.setLatLng([lat,lng]); gpsMarker.setIcon(icon);}
   var n=nearestOnRoute(lat,lng);
   document.getElementById('km-display').textContent='km '+fmtKm(gpxCumToRealKm(n.cum));
-  if(gpsCentering) map.setView([lat,lng],map.getZoom());
+  if(gpsCentering){ window._gpsSelfMove=true; map.setView([lat,lng],map.getZoom()); setTimeout(function(){ window._gpsSelfMove=false; },0); }
 }
 
 function centerGPS() {
   if(!gpsActive){document.getElementById('lyr-gps').checked=true;startGPS();}
-  else{gpsCentering=true;if(gpsMarker)map.setView(gpsMarker.getLatLng(),16);}
+  else{gpsCentering=true;if(gpsMarker){window._gpsSelfMove=true;map.setView(gpsMarker.getLatLng(),16);setTimeout(function(){window._gpsSelfMove=false;},0);}}
 }
 
 // ── VRSTVY ────────────────────────────
@@ -4376,6 +4379,8 @@ function openPhotoFs(src, firebaseKey, item) {
   _renderFsItem(url, firebaseKey, it);
   _updateFsNav();
   document.getElementById('photo-fs').classList.add('open');
+  // 🐞 Beruška sedí na levém okraji přesně přes šipku „‹ zpět" – po dobu prohlížení fotek ji schovej.
+  var _br=document.getElementById('btn-report'); if(_br){ _br.dataset.prevDisp = _br.style.display||''; _br.style.display='none'; }
   unlockViewport();
 }
 function navigateFs(dir){
@@ -4433,6 +4438,8 @@ function closePhotoFs() {
   document.getElementById('photo-fs').classList.remove('open');
   _photoFsKey = null;
   _photoFsItem = null;
+  // obnov berušku do stavu, v jakém byla před otevřením (respektuje oprávnění)
+  var _br=document.getElementById('btn-report'); if(_br){ _br.style.display = _br.dataset.prevDisp || ''; }
   lockViewport();
 }
 
@@ -5123,7 +5130,7 @@ function toggleGpsBtn() {
   } else if(!gpsCentering) {
     // GPS je zapnutá ale necentruje → centruj
     gpsCentering=true;
-    if(gpsMarker) map.setView(gpsMarker.getLatLng(),16);
+    if(gpsMarker){ window._gpsSelfMove=true; map.setView(gpsMarker.getLatLng(),16); setTimeout(function(){ window._gpsSelfMove=false; },0); }
     showToast('Centrování GPS zapnuto',1200);
   } else {
     // GPS centruje → vypni GPS
