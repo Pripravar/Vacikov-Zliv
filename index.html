@@ -770,6 +770,19 @@ textarea.note-field { min-height:80px; resize:vertical; }
 .gallery-item { position:relative; aspect-ratio:1; cursor:pointer; }
 .gallery-item img { width:100%; height:100%; object-fit:cover; border-radius:6px; display:block; }
 .gallery-item-meta { position:absolute; bottom:0; left:0; right:0; background:rgba(0,0,0,0.6); color:#fff; font-size:9px; border-radius:0 0 6px 6px; padding:2px 4px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+/* sdílení SUB/TDS – barevné rámečky + odznaky (modrá=od SUB, zelená=sdíleno SUB, fialová=sdíleno TDS/investor) */
+.gallery-item.gallery-sub img { outline:3px solid #1565c0; outline-offset:-3px; border-radius:6px; }
+.gallery-item.gallery-shared img { outline:3px solid #10b981; outline-offset:-3px; border-radius:6px; }
+.gallery-item.gallery-shared-inv img { outline:3px solid #8b5cf6; outline-offset:-3px; border-radius:6px; }
+.gallery-sub-badge { position:absolute; top:4px; right:4px; background:#1565c0; color:#fff; font-size:9px; font-weight:800; letter-spacing:.5px; padding:2px 6px; border-radius:6px; z-index:3; box-shadow:0 1px 3px rgba(0,0,0,.4); }
+.gallery-shared-badge { position:absolute; top:4px; right:4px; background:#10b981; color:#fff; font-size:9px; font-weight:800; letter-spacing:.3px; padding:2px 6px; border-radius:6px; z-index:3; box-shadow:0 1px 3px rgba(0,0,0,.4); }
+.gallery-shared-badge-inv { background:#8b5cf6; }
+/* čekání na schválení admina + zvýraznění čekajícího v adminu */
+#pending-approval { display:none; position:fixed; inset:0; z-index:99998; background:rgba(10,15,30,.97); align-items:center; justify-content:center; padding:24px; }
+#pending-approval.show { display:flex; }
+#pending-approval .pa-box { background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:26px 22px; max-width:420px; text-align:center; box-shadow:0 8px 30px rgba(0,0,0,.6); }
+#pending-approval .pa-btn { margin-top:16px; background:var(--panel2); color:var(--text); border:1px solid var(--border); border-radius:10px; padding:10px 18px; font-size:14px; cursor:pointer; }
+.ua-row.ua-pending { outline:2px solid #f5a623; outline-offset:-2px; border-radius:10px; }
 .gallery-note-badge { position:absolute; top:3px; right:3px; background:rgba(233,69,96,0.85); color:#fff; font-size:9px; border-radius:3px; padding:1px 4px; }
 #gallery-empty { text-align:center; color:var(--text2); padding:40px 20px; font-size:14px; }
 /* Režim hromadného výběru fotek */
@@ -4423,6 +4436,43 @@ function _renderFsItem(url, firebaseKey, item){
   if(soBtn) soBtn.style.display = canEdit ? 'inline-block' : 'none';
   var kmBtn = document.getElementById('photo-fs-kmedit');
   if(kmBtn) kmBtn.style.display = canEdit ? 'inline-block' : 'none';
+  _updateFsShareBtn();
+}
+// Fullscreen: přepínače „sdílet subce / TDS" (jen člen týmu; omezená kategorie je nevidí)
+function _updateFsShareBtn(){
+  var show = _photoFsKey && window.currentUser && !isRestrictedCategory();
+  var b = document.getElementById('photo-fs-share');
+  if(b){
+    b.style.display = show ? 'inline-block' : 'none';
+    if(show){ var on=!!(_photoFsItem&&_photoFsItem.sdilenoSub);
+      b.textContent = on?'✅ Sdíleno SUB':'📷 Pro SUB'; b.style.background = on?'#10b981':'var(--panel2)'; b.style.color = on?'#fff':'var(--text)'; }
+  }
+  var bi = document.getElementById('photo-fs-share-inv');
+  if(bi){
+    bi.style.display = show ? 'inline-block' : 'none';
+    if(show){ var oni=!!(_photoFsItem&&_photoFsItem.sdilenoInvestor);
+      bi.textContent = oni?'✅ Sdíleno TDS':'🟣 Pro TDS'; bi.style.background = oni?'#8b5cf6':'var(--panel2)'; bi.style.color = oni?'#fff':'var(--text)'; }
+  }
+}
+function toggleFsShareSub(){
+  if(!_photoFsKey || !window.currentUser || isRestrictedCategory()) return;
+  var val = !(_photoFsItem && _photoFsItem.sdilenoSub);
+  db.ref('standalone_photos/'+_photoFsKey+'/sdilenoSub').set(val?true:null).then(function(){
+    if(_photoFsItem) _photoFsItem.sdilenoSub = val; _updateFsShareBtn();
+    try{ if(val) trackEvent('sdileni_sub'); }catch(e){}
+    showToast(val?'📷 Sdíleno subce':'Sdílení SUB zrušeno', 1500);
+    if(document.getElementById('gallery-modal').classList.contains('open')) renderGallery();
+  }).catch(function(){ showToast('❌ Nepodařilo se uložit', 2500); });
+}
+function toggleFsShareInvestor(){
+  if(!_photoFsKey || !window.currentUser || isRestrictedCategory()) return;
+  var val = !(_photoFsItem && _photoFsItem.sdilenoInvestor);
+  db.ref('standalone_photos/'+_photoFsKey+'/sdilenoInvestor').set(val?true:null).then(function(){
+    if(_photoFsItem) _photoFsItem.sdilenoInvestor = val; _updateFsShareBtn();
+    try{ if(val) trackEvent('sdileni_sub'); }catch(e){}
+    showToast(val?'🟣 Sdíleno TDS/investorovi':'Sdílení TDS zrušeno', 1500);
+    if(document.getElementById('gallery-modal').classList.contains('open')) renderGallery();
+  }).catch(function(){ showToast('❌ Nepodařilo se uložit', 2500); });
 }
 // Změna objektu (SO) fotky – reuse výběr objektu jako u focení
 function editPhotoSO(){
@@ -5033,6 +5083,31 @@ function deleteSelectedGalleryPhotos(){
     renderGallery();
   }).catch(function(){ showToast('❌ Chyba mazání', 2500); renderGallery(); });
 }
+// ── Hromadné sdílení vybraných fotek na SUB / TDS(investor) ──
+function _shareSelected(flag, label, color){
+  if(isRestrictedCategory()){ showToast('🔒 Sdílet mohou jen členové týmu', 2500); return; }
+  var items = Object.keys(gallerySelectedKeys||{}).map(function(k){ return gallerySelectedKeys[k]; })
+                 .filter(function(it){ return it && it.fbKey; });
+  if(!items.length){ showToast('Vyber fotky z galerie (jen samostatné jdou sdílet)', 2600); return; }
+  if(!window.currentUser){ showToast('Přihlaš se', 2000); return; }
+  var allShared = items.every(function(it){ return !!it[flag]; });
+  var share = !allShared;
+  if(!confirm(share ? ('Sdílet '+items.length+' fotek '+label+'?\nUvidí je ve své galerii.')
+                    : ('Zrušit sdílení '+label+' u '+items.length+' fotek?'))) return;
+  showSync(share ? ('Sdílím '+label+'…') : ('Ruším sdílení…'));
+  var fail=0;
+  Promise.all(items.map(function(it){
+    return db.ref('standalone_photos/'+it.fbKey+'/'+flag).set(share ? true : null)
+      .then(function(){ it[flag]=share; }).catch(function(){ fail++; });
+  })).then(function(){
+    hideSync();
+    try{ if(share) trackEvent('sdileni_sub'); }catch(e){}
+    showToast((share?('✅ Sdíleno '+label+': '):'Sdílení zrušeno: ')+(items.length-fail)+' fotek'+(fail?(' ('+fail+'× chyba)'):''), 3200);
+    gallerySelectedKeys={}; renderGallery();
+  });
+}
+function shareSelectedWithSub(){ _shareSelected('sdilenoSub', 'pro SUB', '#10b981'); }
+function shareSelectedWithInvestor(){ _shareSelected('sdilenoInvestor', 'pro TDS/investora', '#8b5cf6'); }
 function deleteStandalonePhoto() {
   if(!_photoFsKey) return;
   if(_photoFsItem && !canDeleteRecord(_photoFsItem)){ showToast('🔒 Můžeš mazat jen vlastní fotky', 2500); return; }
@@ -6427,6 +6502,13 @@ function stepGalleryCols(d){
 function openGallery() {
   if(!_perm('galerie')) return;
   document.getElementById('gallery-modal').classList.add('open');
+  // Omezená kategorie (sub/investor): zamkni filtr na „to, co je jí sdílené"
+  var gs=document.getElementById('gfilt-sub');
+  if(gs){
+    if(isSubOnly()){ gs.value='pro'; gs.disabled=true; }
+    else if(isInvestorOnly()){ gs.value='inv-pro'; gs.disabled=true; }
+    else { gs.disabled=false; }
+  }
   applyGalleryCols();
   unlockViewport();
   renderGallery();
@@ -6482,7 +6564,19 @@ function applyGalleryFilters(items){
   var dtOd = (document.getElementById('gfilt-date-od').value || '').trim();
   var dtDo = (document.getElementById('gfilt-date-do').value || '').trim();
   var aut  = (document.getElementById('gfilt-author').value || '').trim();
+  var subEl = document.getElementById('gfilt-sub');
+  var subKind = subEl ? (subEl.value || '') : '';
   return items.filter(function(it){
+    // TVRDÝ BACKSTOP: omezená kategorie (sub/investor) vidí jen fotky sdílené jí
+    if(!canViewPhoto(it)) return false;
+    var isSubPhoto = (it.zdroj === 'SUB' || it.sub);
+    var isInvPhoto = (it.zdroj === 'INVESTOR' || it.investor);
+    if(!isRestrictedCategory()){
+      if(subKind === 'od'      && !isSubPhoto) return false;
+      else if(subKind === 'pro'    && !it.sdilenoSub) return false;
+      else if(subKind === 'inv-od' && !isInvPhoto) return false;
+      else if(subKind === 'inv-pro'&& !it.sdilenoInvestor) return false;
+    }
     if(!isNaN(kmOd) || !isNaN(kmDo)) {
       var km = parseKmStr(it.km);
       if(km === null) return false; // bez km neprochází filtr
@@ -6528,6 +6622,7 @@ function clearGalleryFilters(){
   document.getElementById('gfilt-date-od').value = '';
   document.getElementById('gfilt-date-do').value = '';
   document.getElementById('gfilt-author').value = '';
+  var gs=document.getElementById('gfilt-sub'); if(gs && !gs.disabled) gs.value='';
   renderGallery();
 }
 
@@ -6566,6 +6661,21 @@ function _galleryItemEl(item) {
   meta.className = 'gallery-item-meta';
   meta.textContent = (item.km ? 'km ' + item.km : '') + (item.km && (item.date || item.author) ? ' • ' : '') + (item.date || '') + (item.date && item.author ? ' • ' : '') + (item.author || '');
   div.appendChild(meta);
+  // Odznaky/rámečky sdílení SUB/TDS
+  if(item.zdroj === 'SUB' || item.sub){
+    div.classList.add('gallery-sub');
+    var subB = document.createElement('div'); subB.className = 'gallery-sub-badge'; subB.textContent = 'SUB'; div.appendChild(subB);
+  }
+  if(item.sdilenoSub && !(item.zdroj === 'SUB' || item.sub)){
+    div.classList.add('gallery-shared');
+    var shB = document.createElement('div'); shB.className = 'gallery-shared-badge'; shB.textContent = '↗ SUB'; div.appendChild(shB);
+  }
+  if(item.sdilenoInvestor && !(item.zdroj === 'INVESTOR' || item.investor)){
+    div.classList.add('gallery-shared-inv');
+    var shI = document.createElement('div'); shI.className = 'gallery-shared-badge gallery-shared-badge-inv'; shI.textContent = '↗ TDS';
+    shI.style.top = (item.sdilenoSub ? '24px' : '4px');   // ať se nepřekrývá se SUB odznakem
+    div.appendChild(shI);
+  }
   return div;
 }
 
@@ -6734,18 +6844,78 @@ function isBlocked(uid){
   if(!me) return false;
   return !!(window.allUsers[me] && window.allUsers[me].blocked);
 }
-// ZÁMĚRNĚ allow-by-default (fail-OPEN): dokud se /uzivatele nenačte, má uživatel vše.
-// Vhodné pro MALÝ DŮVĚRYHODNÝ TÝM bez kategorií sub/investor (tahle stavba je nemá).
-// ⚠️ Kdyby se sem kdy přidal OMEZENÝ uživatel (subka/investor), přepni na fail-CLOSED
-// (`if(!window._usersLoaded) return ADMIN...`) — jinak by mezi loginem a načtením práv viděl vše.
-// Tvrdá hranice jsou tak jako tak Firebase pravidla; klient je UX brána.
+// ══════════ KATEGORIE ÚČTŮ (náš tým / SUB / investor-TDS) ══════════
+// silnice = náš tým (vidí vše, allow-by-default). sub/investor = OMEZENÍ: vidí jen fotky
+// sdílené jim + jen povolené funkce. Tvrdá hranice = Firebase pravidla (kategorii mění jen admin).
+var CATEGORIES = [
+  { key:'silnice',  label:'M - SILNICE (náš tým)',    color:'#f5a623' },
+  { key:'sub',      label:'SUB (subdodavatel/firma)', color:'#10b981' },
+  { key:'investor', label:'Investor / TDS',            color:'#8b5cf6' }
+];
+// Výchozí práva omezených kategorií (co SMÍ). Náš tým (silnice) má vše.
+var DEFAULT_CATEGORY_PERMS = {
+  silnice:  {},
+  sub:      { foto:true, galerie:true, gps:true, beruska:true, fotomapa:true, trasa:true },
+  investor: { galerie:true, beruska:true, fotomapa:true, trasa:true }
+};
+window.categoryPerms = {};   // admin může výchozí přepsat přes /nastaveni/kategorie_prava
+function userCategory(uid){
+  var u = uid || (window.currentUser && window.currentUser.uid);
+  var rec = (window.allUsers && window.allUsers[u]) || {};
+  return rec.kategorie || 'silnice';
+}
+function isSubOnly(uid){ return userCategory(uid) === 'sub'; }
+function isInvestorOnly(uid){ return userCategory(uid) === 'investor'; }
+function isRestrictedCategory(uid){ var c = userCategory(uid); return c === 'sub' || c === 'investor'; }
+// Schválení adminem. GRANDFATHERING: chybějící pole = schválený (nezamkne existující tým);
+// jen NOVÝ login dostane approved:false (completeLogin) → čeká, dokud ho admin nepustí.
+function isApproved(uid){
+  var u = uid || (window.currentUser && window.currentUser.uid);
+  if(isAdmin(u)) return true;
+  var rec = (window.allUsers && window.allUsers[u]) || {};
+  return rec.approved !== false;
+}
+function _catDefaults(cat){
+  var seed = DEFAULT_CATEGORY_PERMS[cat] || {};
+  var saved = window.categoryPerms && window.categoryPerms[cat];
+  if(!saved) return seed;
+  var out = {}; Object.keys(seed).forEach(function(k){ out[k]=seed[k]; });
+  Object.keys(saved).forEach(function(k){ out[k]=saved[k]; });   // co admin uložil, má přednost
+  return out;
+}
+function categoryAllows(cat, feature){
+  if(cat === 'silnice') return true;
+  return _catDefaults(cat)[feature] === true;
+}
+// JEDINÉ pravidlo viditelnosti fotky (galerie i fotomapa i fullscreen).
+function canViewPhoto(it){
+  if(isAdmin()) return true;
+  if(!isApproved()) return false;              // čekající na schválení nevidí nic
+  if(!isRestrictedCategory()) return true;
+  if(!it) return false;
+  if(isSubOnly())      return !!(it.zdroj === 'SUB'      || it.sub      || it.sdilenoSub);
+  if(isInvestorOnly()) return !!(it.zdroj === 'INVESTOR' || it.investor || it.sdilenoInvestor);
+  return false;
+}
+function loadCategoryPerms(){
+  db.ref('nastaveni/kategorie_prava').on('value', function(snap){
+    window.categoryPerms = snap.val() || {};
+    try{ applyPermsToUI(); }catch(e){}
+  });
+}
+// Práva k funkcím. Náš tým = allow-by-default; sub/investor = jen dle kategorie (+ admin override).
+// FAIL-CLOSED pro omezené: dokud se /uzivatele nenačte a je to známý omezený účet, nic nepovol.
 function hasPerm(f){
   var me = window.currentUser && window.currentUser.uid;
   if(!me) return false;
   if(isAdmin(me)) return true;
   if(isBlocked(me)) return false;
+  if(!isApproved(me)) return false;                              // čeká na schválení admina = nic
+  if(window._usersLoaded && !window.allUsers[me]) return false;   // neznámý po načtení = nic
   var rec = window.allUsers[me] || {};
-  return !(rec.perms && rec.perms[f] === false);   // allow-by-default (uloženy jen ZAKÁZANÉ)
+  if(rec.perms && rec.perms[f] === true) return true;    // per-uživatel override (povolit)
+  if(rec.perms && rec.perms[f] === false) return false;  // per-uživatel override (zakázat)
+  return categoryAllows(userCategory(me), f);            // silnice=vše; sub/investor=jen povolené
 }
 // Mazání jen vlastních záznamů (nebo admin). Legacy bez vlastníka smí každý přihlášený.
 function canDeleteRecord(rec){
@@ -6860,27 +7030,40 @@ function renderUserAdmin(){
   var users = Object.keys(window.allUsers||{}).map(function(uid){
     var u = window.allUsers[uid] || {}; u.uid = uid; return u;
   }).filter(function(u){ return u.name || u.email; });
-  users.sort(function(a,b){ return (b.lastSeen||0) - (a.lastSeen||0); });
+  users.sort(function(a,b){
+    var pa = (!isAdmin(a.uid) && a.approved===false)?0:1;   // čekající na schválení NAHORU
+    var pb = (!isAdmin(b.uid) && b.approved===false)?0:1;
+    if(pa!==pb) return pa-pb;
+    return (b.lastSeen||0) - (a.lastSeen||0);
+  });
   if(!users.length){ box.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text2);">Zatím žádní přihlášení uživatelé.</div>'; return; }
   var me = window.currentUser.uid;
   box.innerHTML = users.map(function(u){
     var adm = isAdmin(u.uid), blk = !!u.blocked, self = (u.uid===me);
+    var pending = !adm && u.approved === false;
+    var cat = userCategory(u.uid);
     var badges = '';
+    if(pending) badges += '<span class="ua-badge" style="background:#f5a623;color:#0f3460;">⏳ ČEKÁ</span>';
     if(adm) badges += '<span class="ua-badge ua-admin">ADMIN</span>';
     if(blk) badges += '<span class="ua-badge ua-blocked">BLOKOVÁN</span>';
+    if(!adm && cat!=='silnice'){ var cc=(CATEGORIES.filter(function(c){return c.key===cat;})[0]||{}); badges += '<span class="ua-badge" style="background:'+(cc.color||'#666')+';color:#fff;">'+(cat==='sub'?'SUB':'TDS/INV')+'</span>'; }
     var perms = adm ? '' : FEATURES.map(function(f){
-      var allowed = !(u.perms && u.perms[f.key] === false);
+      var allowed = _userPermEffective(u.uid, f.key);
       return '<label class="ua-perm"><input type="checkbox" ' + (allowed?'checked':'') +
              ' onchange="toggleUserPerm(\'' + u.uid + '\',\'' + f.key + '\',this.checked)"><span>' + f.label + '</span></label>';
     }).join('');
+    var catSel = adm ? '' : ('<select class="ua-btn" onchange="setUserCategory(\''+u.uid+'\',this.value)" title="Kategorie účtu (řídí výchozí práva + viditelnost fotek)" style="max-width:170px;">' +
+      CATEGORIES.map(function(c){ return '<option value="'+c.key+'"'+(c.key===cat?' selected':'')+'>'+c.label+'</option>'; }).join('') + '</select>');
     var avatar = u.photo ? ('<img class="ua-av" src="' + u.photo + '">') : '<div class="ua-av ua-av-ph">👤</div>';
-    return '<div class="ua-row">' +
+    return '<div class="ua-row'+(pending?' ua-pending':'')+'">' +
       '<div class="ua-head">' + avatar +
         '<div class="ua-id"><div class="ua-name">' + (u.name||'(bez jména)') + ' ' + badges + '</div>' +
         '<div class="ua-sub">' + (u.email || u.phone || '') + ' · ' + _relTime(u.lastSeen) + '</div></div>' +
         '<div class="ua-actions">' +
           (self ? '<span style="font-size:11px;color:var(--text2);">(ty)</span>' :
-            ('<button class="ua-btn" onclick="toggleUserAdmin(\'' + u.uid + '\',' + (!adm) + ')">' + (adm?'⭐ odebrat admina':'⭐ admin') + '</button>' +
+            ((pending ? '<button class="ua-btn ua-btn-green" onclick="toggleUserApprove(\''+u.uid+'\',true)">✅ Schválit</button>' : '') +
+             catSel +
+             '<button class="ua-btn" onclick="toggleUserAdmin(\'' + u.uid + '\',' + (!adm) + ')">' + (adm?'⭐ odebrat admina':'⭐ admin') + '</button>' +
              '<button class="ua-btn" onclick="toggleUserTeam(\'' + u.uid + '\')" title="Soutěží v žebříčku aktivity">' + (u.tym===false?'🏆 do soutěže':'🏆 ze soutěže') + '</button>' +
              '<button class="ua-btn ' + (blk?'ua-btn-green':'ua-btn-red') + '" onclick="toggleUserBlock(\'' + u.uid + '\',' + (!blk) + ')">' + (blk?'✅ odblokovat':'🚫 blokovat') + '</button>')) +
         '</div>' +
@@ -6889,10 +7072,33 @@ function renderUserAdmin(){
     '</div>';
   }).join('');
 }
+// Efektivní právo = per-uživatel override (true/false), jinak výchozí dle kategorie.
+function _userPermEffective(uid, key){
+  var u = (window.allUsers||{})[uid] || {};
+  if(u.perms && u.perms[key] === true) return true;
+  if(u.perms && u.perms[key] === false) return false;
+  return categoryAllows(userCategory(uid), key);
+}
 function toggleUserPerm(uid, key, allowed){
   if(!isAdmin()) return;
-  // allow-by-default: ukládej jen ZAKÁZANÉ (false), povolené = null (smaž)
-  db.ref('uzivatele/' + uid + '/perms/' + key).set(allowed ? null : false);
+  // ukládej override jen když se LIŠÍ od výchozího práva kategorie (jinak null = dědí)
+  var catDef = categoryAllows(userCategory(uid), key);
+  var val = (allowed === catDef) ? null : allowed;
+  db.ref('uzivatele/' + uid + '/perms/' + key).set(val);
+}
+function setUserCategory(uid, cat){
+  if(!isAdmin()) return;
+  var u = (window.allUsers||{})[uid] || {};
+  var lbl = (CATEGORIES.filter(function(c){return c.key===cat;})[0]||{}).label || cat;
+  db.ref('uzivatele/' + uid + '/kategorie').set(cat==='silnice' ? null : cat)   // silnice = výchozí = bez pole
+    .then(function(){ showToast('👤 '+(u.name||'Uživatel')+' → '+lbl, 2200); })
+    .catch(function(e){ showToast('❌ '+((e&&e.message)||'chyba'), 3000); });
+}
+function toggleUserApprove(uid, ok){
+  if(!isAdmin() || uid===window.currentUser.uid) return;
+  db.ref('uzivatele/' + uid + '/approved').set(ok ? true : false)
+    .then(function(){ showToast(ok?'✅ Uživatel schválen':'⏳ Schválení odebráno', 2000); })
+    .catch(function(e){ showToast('❌ '+((e&&e.message)||'chyba'), 3000); });
 }
 function toggleUserBlock(uid, block){
   if(!isAdmin() || uid===window.currentUser.uid) return;
@@ -7179,31 +7385,36 @@ function completeLogin(user, nameOverride) {
     phone: phone,
     photo: user.photoURL || ''
   };
-  // Zapsat / aktualizovat profil v DB
-  db.ref('uzivatele/' + user.uid).update({
-    uid:      user.uid,
-    name:     displayName,
-    email:    email,
-    phone:    phone,
-    photo:    window.currentUser.photo,
-    lastSeen: Date.now()
-  });
+  // Profil se zapíše až v once() níže – kvůli detekci NOVÉHO loginu pro approval gate
+  // (kdybychom zapsali hned, once() by nový záznam už viděl jako existující).
   // UI: badge
   document.getElementById('user-photo').src = window.currentUser.photo || 'data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%23a0aec0%22><circle cx=%2212%22 cy=%228%22 r=%224%22/><path d=%22M12 14c-4 0-8 2-8 6v2h16v-2c0-4-4-6-8-6z%22/></svg>';
   document.getElementById('user-name').textContent = displayName.split(' ')[0];
   localStorage.setItem('noteAuthor', displayName);
+  // APPROVAL GATE: zjisti, zda je login NOVÝ, zapiš profil a pusť dovnitř jen schválené.
+  // Grandfather: existující tým nemá pole `approved` (rec.approved===undefined) → projde.
+  db.ref('uzivatele/' + user.uid).once('value').then(function(snap){
+    var existed = snap.exists(), rec = snap.val() || {};
+    var wr = { uid:user.uid, name:displayName, email:email, phone:phone, photo:window.currentUser.photo, lastSeen: Date.now() };
+    if(!existed) wr.approved = false;                     // NOVÝ login → čeká na schválení admina
+    db.ref('uzivatele/' + user.uid).update(wr);
+    var amAdmin = (ADMIN_EMAILS.indexOf((email||'').toLowerCase()) !== -1) || rec.role === 'admin';
+    if((!existed || rec.approved === false) && !amAdmin){ _showPendingApproval(user.uid, displayName); return; }
+    _enterAppAfterLogin();
+  }).catch(function(){ _enterAppAfterLogin(); });          // chyba čtení = pusť (tvrdá hranice jsou DB pravidla)
+}
+function _enterAppAfterLogin(){
   document.getElementById('auth-gate').classList.add('hide');
-  // Načíst data
+  var pa = document.getElementById('pending-approval'); if(pa) pa.classList.remove('show');
   loadAllUsers();
+  loadCategoryPerms();
   loadTasks();
   loadRozhlas();
   loadActivity();
   loadBlok();
   loadHlaseni();
   initBodySystem();
-  // Data z DB, která dřív načítal init() PŘED loginem — teď až tady, po přihlášení
-  // (DB má .read: auth != null, takže před loginem by se listenery zrušily). Idempotentní:
-  // onAuthStateChanged→completeLogin může přijít víckrát, load* jen přepíšou .on() listener.
+  // Data z DB, která dřív načítal init() PŘED loginem — teď až tady, po přihlášení (idempotentní).
   loadNotes();
   loadVykresy();
   loadMereni();
@@ -7213,7 +7424,25 @@ function completeLogin(user, nameOverride) {
   loadStroje();
   setupFcmIfPossible();
   maybeShowIosHint();
-  applyPermsToUI();   // hned aplikuj (loadAllUsers pak přepíše dle uložených práv)
+  applyPermsToUI();
+}
+// Přihlášený, ale ještě neschválený adminem: nevpustit, živě čekat na schválení.
+function _showPendingApproval(uid, name){
+  document.getElementById('auth-gate').classList.add('hide');
+  var ov = document.getElementById('pending-approval');
+  if(!ov){
+    ov = document.createElement('div'); ov.id = 'pending-approval';
+    ov.innerHTML = '<div class="pa-box"><div style="font-size:44px;">⏳</div>' +
+      '<h2 style="margin:8px 0;">Čekáš na schválení</h2>' +
+      '<p style="color:var(--text2);line-height:1.5;">Přihlášení proběhlo. Administrátor tě musí schválit a přiřadit roli (náš tým / SUB / TDS). Jakmile to udělá, aplikace se sama otevře.</p>' +
+      '<p style="color:var(--text2);font-size:12px;">Přihlášen jako <b>' + _esc(name||'') + '</b></p>' +
+      '<button class="pa-btn" onclick="if(fbAuth)fbAuth.signOut().then(function(){location.reload();});else location.reload();">Odhlásit</button></div>';
+    document.body.appendChild(ov);
+  }
+  ov.classList.add('show');
+  db.ref('uzivatele/' + uid + '/approved').on('value', function(s){
+    if(s.val() === true){ ov.classList.remove('show'); _enterAppAfterLogin(); }
+  });
 }
 
 // Hlavní auth listener - běží automaticky po načtení stránky
@@ -10704,6 +10933,8 @@ function copyDiaryExport(){
     <a id="photo-fs-open" href="#" target="_blank" rel="noopener" style="background:#1565c0;color:#fff;padding:8px 14px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700;">&#128247; Otevřít</a>
     <button id="photo-fs-soedit" onclick="editPhotoSO()" style="display:none;background:var(--panel2);color:var(--text);border:none;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">🏗️ Objekt</button>
     <button id="photo-fs-kmedit" onclick="editPhotoKm()" style="display:none;background:var(--panel2);color:var(--text);border:none;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">📍 km</button>
+    <button id="photo-fs-share" onclick="toggleFsShareSub()" style="display:none;background:var(--panel2);color:var(--text);border:none;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">📷 Pro SUB</button>
+    <button id="photo-fs-share-inv" onclick="toggleFsShareInvestor()" style="display:none;background:var(--panel2);color:var(--text);border:none;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">🟣 Pro TDS</button>
     <button id="photo-fs-delete" onclick="deleteStandalonePhoto()" style="display:none;background:#e94560;color:#fff;border:none;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">&#128465; Smazat</button>
     <button onclick="closePhotoFs()" style="background:#333;color:#fff;border:none;padding:8px 14px;border-radius:8px;font-size:13px;cursor:pointer;">Zavřít</button>
   </div>
@@ -10765,6 +10996,16 @@ function copyDiaryExport(){
           <option value="">— libovolný —</option>
         </select>
       </div>
+      <div style="flex:1;">
+        <div style="font-size:10px;color:var(--text2);text-transform:uppercase;margin-bottom:2px;">🔗 Sdílení SUB / TDS</div>
+        <select id="gfilt-sub" onchange="renderGallery()" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 8px;font-size:13px;">
+          <option value="">— všechny —</option>
+          <option value="pro">🟢 Sdílené pro SUB</option>
+          <option value="inv-pro">🟣 Sdílené pro TDS/investora</option>
+          <option value="od">🔵 Od SUB</option>
+          <option value="inv-od">🟣 Od TDS/investora</option>
+        </select>
+      </div>
       <button onclick="clearGalleryFilters()" style="background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text2);padding:6px 10px;font-size:12px;cursor:pointer;">⌫ Vynulovat</button>
       <div style="display:flex;align-items:center;gap:3px;">
         <button onclick="stepGalleryCols(-1)" title="Méně fotek ve řadě" style="background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);width:30px;padding:6px 0;font-size:15px;cursor:pointer;">−</button>
@@ -10784,6 +11025,8 @@ function copyDiaryExport(){
     <button class="secondary" onclick="clearGallerySelection()">−</button>
     <button onclick="downloadSelectedGalleryPhotosShare()" title="Uložit do Fotek na mobilu">📲 Mobil</button>
     <button onclick="downloadSelectedGalleryPhotosZip()" title="Stáhnout jako ZIP na PC">💻 ZIP</button>
+    <button id="gab-share-sub" onclick="shareSelectedWithSub()" title="Sdílet vybrané fotky subdodavateli (uvidí je ve své galerii)" style="background:#10b981;color:#fff;">📷 Pro SUB</button>
+    <button id="gab-share-inv" onclick="shareSelectedWithInvestor()" title="Sdílet vybrané fotky TDS / investorovi" style="background:#8b5cf6;color:#fff;">🟣 Pro TDS</button>
     <button onclick="deleteSelectedGalleryPhotos()" title="Smazat vybrané (jen vlastní)" style="background:#e94560;color:#fff;">🗑 Smazat</button>
   </div>
 </div>

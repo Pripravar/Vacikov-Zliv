@@ -1,13 +1,39 @@
 {
   "rules": {
     ".read": "auth != null",
-    ".write": "auth != null && root.child('uzivatele').child(auth.uid).child('blocked').val() !== true",
+
     "uzivatele": {
       "$uid": {
-        "role":    { ".validate": "auth.token.email === 'arasid33@gmail.com' || root.child('uzivatele').child(auth.uid).child('role').val() === 'admin' || newData.val() === data.val()" },
-        "blocked": { ".validate": "auth.token.email === 'arasid33@gmail.com' || root.child('uzivatele').child(auth.uid).child('role').val() === 'admin' || newData.val() === data.val()" },
-        "perms":   { ".validate": "auth.token.email === 'arasid33@gmail.com' || root.child('uzivatele').child(auth.uid).child('role').val() === 'admin'" }
+        "uid":      { ".write": "auth != null && (auth.uid === $uid || auth.token.email === 'arasid33@gmail.com' || root.child('uzivatele').child(auth.uid).child('role').val() === 'admin') && root.child('uzivatele').child(auth.uid).child('blocked').val() !== true" },
+        "name":     { ".write": "auth != null && (auth.uid === $uid || auth.token.email === 'arasid33@gmail.com' || root.child('uzivatele').child(auth.uid).child('role').val() === 'admin') && root.child('uzivatele').child(auth.uid).child('blocked').val() !== true" },
+        "email":    { ".write": "auth != null && (auth.uid === $uid || auth.token.email === 'arasid33@gmail.com' || root.child('uzivatele').child(auth.uid).child('role').val() === 'admin') && root.child('uzivatele').child(auth.uid).child('blocked').val() !== true" },
+        "phone":    { ".write": "auth != null && (auth.uid === $uid || auth.token.email === 'arasid33@gmail.com' || root.child('uzivatele').child(auth.uid).child('role').val() === 'admin') && root.child('uzivatele').child(auth.uid).child('blocked').val() !== true" },
+        "photo":    { ".write": "auth != null && (auth.uid === $uid || auth.token.email === 'arasid33@gmail.com' || root.child('uzivatele').child(auth.uid).child('role').val() === 'admin') && root.child('uzivatele').child(auth.uid).child('blocked').val() !== true" },
+        "lastSeen": { ".write": "auth != null && (auth.uid === $uid || auth.token.email === 'arasid33@gmail.com' || root.child('uzivatele').child(auth.uid).child('role').val() === 'admin') && root.child('uzivatele').child(auth.uid).child('blocked').val() !== true" },
+        "fcmToken": { ".write": "auth != null && (auth.uid === $uid || auth.token.email === 'arasid33@gmail.com' || root.child('uzivatele').child(auth.uid).child('role').val() === 'admin') && root.child('uzivatele').child(auth.uid).child('blocked').val() !== true" },
+
+        "approved":  { ".write": "(auth.token.email === 'arasid33@gmail.com' || root.child('uzivatele').child(auth.uid).child('role').val() === 'admin') || (auth != null && auth.uid === $uid && newData.val() === false)" },
+        "kategorie": { ".write": "(auth.token.email === 'arasid33@gmail.com' || root.child('uzivatele').child(auth.uid).child('role').val() === 'admin') && root.child('uzivatele').child(auth.uid).child('blocked').val() !== true" },
+        "role":      { ".write": "(auth.token.email === 'arasid33@gmail.com' || root.child('uzivatele').child(auth.uid).child('role').val() === 'admin') && root.child('uzivatele').child(auth.uid).child('blocked').val() !== true" },
+        "blocked":   { ".write": "(auth.token.email === 'arasid33@gmail.com' || root.child('uzivatele').child(auth.uid).child('role').val() === 'admin') && root.child('uzivatele').child(auth.uid).child('blocked').val() !== true" },
+        "tym":       { ".write": "(auth.token.email === 'arasid33@gmail.com' || root.child('uzivatele').child(auth.uid).child('role').val() === 'admin') && root.child('uzivatele').child(auth.uid).child('blocked').val() !== true" },
+        "perms":     { ".write": "(auth.token.email === 'arasid33@gmail.com' || root.child('uzivatele').child(auth.uid).child('role').val() === 'admin') && root.child('uzivatele').child(auth.uid).child('blocked').val() !== true" }
       }
+    },
+
+    "nastaveni": {
+      "kategorie_prava": { ".write": "(auth.token.email === 'arasid33@gmail.com' || root.child('uzivatele').child(auth.uid).child('role').val() === 'admin') && root.child('uzivatele').child(auth.uid).child('blocked').val() !== true" },
+      "$other": { ".write": "auth != null && root.child('uzivatele').child(auth.uid).child('blocked').val() !== true" }
+    },
+
+    "standalone_photos": {
+      "$id": {
+        ".write": "auth != null && root.child('uzivatele').child(auth.uid).child('blocked').val() !== true && (newData.exists() || auth.token.email === 'arasid33@gmail.com' || root.child('uzivatele').child(auth.uid).child('role').val() === 'admin' || !data.child('ownerUid').exists() || data.child('ownerUid').val() === auth.uid)"
+      }
+    },
+
+    "$other": {
+      ".write": "auth != null && root.child('uzivatele').child(auth.uid).child('blocked').val() !== true"
     }
   }
 }
