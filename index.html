@@ -6870,6 +6870,7 @@ window.allUsers    = {};       // {uid: {uid,name,email,photo,fcmToken,lastSeen}
 // ══════════════════════════════════════════════════════════════════
 var ADMIN_EMAILS = ['arasid33@gmail.com'];   // bootstrap admin (koordinátor) – je admin hned po přihlášení
 var FEATURES = [
+  {key:'prepinac', label:'🗺️ Přepínač staveb (rozcestník)', btns:[]},   // OZ-JIH switcher – kategorie silnice=ano, sub/investor=ne, + osobní výjimka
   {key:'pdf',       label:'Prohlížení výkresů / PD (PDF)', btns:[]},
   {key:'foto',      label:'Focení',                    btns:['btn-standalone-foto','btn-import-foto','btn-foto-fab']},
   {key:'vykresy',   label:'Nahrávání výkresů / PDF',   btns:['btn-pdf-addvk']},
@@ -6992,6 +6993,9 @@ function applyPermsToUI(){
       if(el) el.style.display = vis ? '' : 'none';
     });
   });
+  // Plovoucí přepínač staveb (OZ-JIH) – řízeno právem 'prepinac' (stejně jako ostatní funkce)
+  window.MSWState = { override: hasPerm('prepinac') };
+  if(typeof window.MSWInit === 'function'){ window.MSWInit(window.MSWState); }
   document.querySelectorAll('[data-perm]').forEach(function(sec){
     var vis = hasPerm(sec.getAttribute('data-perm'));
     if(!vis){
