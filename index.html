@@ -6411,23 +6411,67 @@ window._photoUploading = false;
 window._lastPhotoTs = 0;
 // Unikátní rostoucí timestamp (dvě fotky za sebou nesmí dostat stejný klíč/název)
 function _uniquePhotoTs(){ var t=Date.now(); if(t<=window._lastPhotoTs) t=window._lastPhotoTs+1; window._lastPhotoTs=t; return t; }
+
+// ── Perzistentní fronta nenahraných fotek (IndexedDB) ──────────────────────────
+// Fotka se uloží do ZAŘÍZENÍ hned po vyfocení a smaže se AŽ po úspěšném uložení na server.
+// → i když Storage/billing vypadne nebo appku zavřeš, fotka se neztratí a nahraje se sama.
+var _photoIDB = null;
+function _photoIDBOpen(){
+  return new Promise(function(res){
+    if(_photoIDB) return res(_photoIDB);
+    try{
+      var rq = indexedDB.open('vacikovPhotos', 1);
+      rq.onupgradeneeded = function(e){ var db=e.target.result; if(!db.objectStoreNames.contains('pending')) db.createObjectStore('pending',{keyPath:'t'}); };
+      rq.onsuccess = function(e){ _photoIDB=e.target.result; res(_photoIDB); };
+      rq.onerror = function(){ res(null); };
+    }catch(e){ res(null); }
+  });
+}
+function _photoDbPut(job){ _photoIDBOpen().then(function(db){ if(!db)return; try{ db.transaction('pending','readwrite').objectStore('pending').put({t:job.t,compressed:job.compressed,meta:job.meta,yes:job.yes,_tries:job._tries||0}); }catch(e){} }); }
+function _photoDbDelete(t){ _photoIDBOpen().then(function(db){ if(!db)return; try{ db.transaction('pending','readwrite').objectStore('pending').delete(t); }catch(e){} }); }
+function _photoDbAll(){ return _photoIDBOpen().then(function(db){ return new Promise(function(res){ if(!db)return res([]); try{ var rq=db.transaction('pending','readonly').objectStore('pending').getAll(); rq.onsuccess=function(){ res(rq.result||[]); }; rq.onerror=function(){ res([]); }; }catch(e){ res([]); } }); }); }
+// Po přihlášení obnov nenahrané fotky z minula (výpadek serveru / zavřená appka)
+function _restorePhotoQueue(){
+  _photoDbAll().then(function(jobs){
+    if(!jobs || !jobs.length) return;
+    var added=0;
+    jobs.forEach(function(j){ if(j && j.compressed && !window._photoQueue.some(function(q){return q.t===j.t;})){ j._tries=0; window._photoQueue.push(j); added++; } });
+    if(added){ _updateUploadBadge(); _processPhotoQueue(); showToast('📤 Dohrávám '+added+' '+(added===1?'fotku':'fotek')+' z minula…', 3500); }
+  });
+}
+
 function _updateUploadBadge(){
-  var n = window._photoQueue.length + (window._photoUploading ? 1 : 0);
+  var q = window._photoQueue;
+  var n = q.length + (window._photoUploading ? 1 : 0);
+  var failing = q.some(function(j){ return (j._tries||0) >= 2; });   // opakovaně selhává = problém se serverem
   var b = document.getElementById('upload-badge');
   if(!b){
-    b = document.createElement('div');
-    b.id = 'upload-badge';
+    b = document.createElement('div'); b.id = 'upload-badge';
     b.style.cssText = 'position:fixed;top:56px;left:50%;transform:translateX(-50%);z-index:6000;background:#1565c0;color:#fff;font-size:13px;font-weight:700;padding:6px 14px;border-radius:20px;box-shadow:0 2px 10px rgba(0,0,0,.45);display:none;pointer-events:none;';
     document.body.appendChild(b);
   }
-  if(n > 0){ b.textContent = '⏳ Nahrávám ' + n + (n===1?' fotku…':' fotky…'); b.style.display = 'block'; }
-  else { b.style.display = 'none'; }
+  var w = document.getElementById('photo-fail-banner');
+  if(!w){
+    w = document.createElement('div'); w.id = 'photo-fail-banner';
+    w.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9998;background:#c0392b;color:#fff;font-size:13px;font-weight:700;padding:9px 14px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,.5);display:none;pointer-events:none;line-height:1.35;';
+    document.body.appendChild(w);
+  }
+  if(failing){
+    b.style.display = 'none';
+    w.innerHTML = '⚠️ '+n+' '+(n===1?'fotka se zatím NEULOŽILA':'fotek se zatím NEULOŽILO')+' na server – zkouším to dál.<br>Fotky jsou bezpečně uložené v telefonu a nahrají se samy, až server pojede. <b>Neztratí se.</b>';
+    w.style.display = 'block';
+  } else {
+    w.style.display = 'none';
+    if(n > 0){ b.textContent = '⏳ Nahrávám ' + n + (n===1?' fotku…':' fotky…'); b.style.display = 'block'; }
+    else { b.style.display = 'none'; }
+  }
 }
 function enqueuePhoto(job){
   if(!job || !job.compressed || !job.meta) return;
   if(job.t == null) job.t = _uniquePhotoTs();
   if(job._tries == null) job._tries = 0;
   window._photoQueue.push(job);
+  _photoDbPut(job);                 // IHNED ulož do zařízení (přežije pád / zavření / výpadek serveru)
   _updateUploadBadge();
   _processPhotoQueue();
 }
@@ -6438,13 +6482,18 @@ function _processPhotoQueue(){
   window._photoUploading = true;
   _updateUploadBadge();
   _uploadPhotoJob(job, function(ok){
-    if(!ok && job._tries < 1){        // 1× retry na konec fronty
-      job._tries++;
-      window._photoQueue.push(job);
-    }
     window._photoUploading = false;
-    _updateUploadBadge();
-    _processPhotoQueue();             // další v pořadí
+    if(ok){
+      _photoDbDelete(job.t);        // uloženo na server → smaž lokální kopii
+      _updateUploadBadge();
+      _processPhotoQueue();
+    } else {
+      job._tries = (job._tries||0) + 1;
+      _photoDbPut(job);             // NIKDY nezahazuj – ulož a zkoušej znovu s prodlevou (backoff)
+      window._photoQueue.push(job);
+      _updateUploadBadge();
+      setTimeout(_processPhotoQueue, Math.min(30000, 3000 * job._tries));
+    }
   });
 }
 // Vlastní zpracování jedné fotky: razítko → 2 verze (originál+razítko) → miniatura → DB.
@@ -7528,6 +7577,7 @@ function _enterAppAfterLogin(){
   setupFcmIfPossible();
   maybeShowIosHint();
   applyPermsToUI();
+  try{ _restorePhotoQueue(); }catch(e){}   // dohraj fotky, které se dřív nenahrály (výpadek serveru)
 }
 // Přihlášený, ale ještě neschválený adminem: nevpustit, živě čekat na schválení.
 function _showPendingApproval(uid, name){
