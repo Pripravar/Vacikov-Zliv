@@ -3915,11 +3915,19 @@ function loadPanorama360(){
     });
   });
 }
-// unikátní skupiny (procházky) + počty, seřazené
+// Řadicí klíč skupiny podle DATA v názvu (DD.MM.YY → YYYYMMDD); bez data → na konec.
+function _panoDateKey(sk){
+  var m=String(sk||'').match(/(\d{1,2})\.(\d{1,2})\.(\d{2,4})/);
+  if(!m) return '99999999_'+sk;
+  var y=m[3].length===2 ? ('20'+m[3]) : m[3];
+  return y + ('0'+m[2]).slice(-2) + ('0'+m[1]).slice(-2) + '_' + sk;   // sekundárně název (hlavní před Leletice)
+}
+// unikátní skupiny (procházky) + počty, seřazené CHRONOLOGICKY (nejstarší → nejnovější)
 function _panoGroups(){
   var d=window.pano360Data||{}, set={};
   Object.keys(d).forEach(function(k){ var s=_panoGroupOf(d[k]); set[s]=(set[s]||0)+1; });
-  return Object.keys(set).sort().map(function(s){ return {skupina:s, count:set[s]}; });
+  return Object.keys(set).sort(function(a,b){ var ka=_panoDateKey(a), kb=_panoDateKey(b); return ka<kb?-1:(ka>kb?1:0); })
+    .map(function(s){ return {skupina:s, count:set[s]}; });
 }
 // záznamy jedné skupiny seřazené podle 'order'
 function _panoSortedGroup(sk){
@@ -6307,7 +6315,7 @@ function importFotoPicked(input){
 function _importFotoProcess(files, batchSo){
   var author = (window.currentUser && window.currentUser.name) || localStorage.getItem('noteAuthor') || '';
   var enq = 0, skip = 0, pending = files.length;
-  showToast('📥 Importuji '+files.length+' '+(files.length===1?'fotku':'fotek')+'…', 2500);
+  showToast('📥 Importuji '+files.length+' '+_czPlural(files.length,'fotku','fotky','fotek')+'…', 2500);
   files.forEach(function(file){
     if(!/^image\//.test(file.type) && !/\.(jpe?g|png|heic)$/i.test(file.name)){ skip++; pending--; return; }
     var reader = new FileReader();
@@ -6436,10 +6444,12 @@ function _restorePhotoQueue(){
     if(!jobs || !jobs.length) return;
     var added=0;
     jobs.forEach(function(j){ if(j && j.compressed && !window._photoQueue.some(function(q){return q.t===j.t;})){ j._tries=0; window._photoQueue.push(j); added++; } });
-    if(added){ _updateUploadBadge(); _processPhotoQueue(); showToast('📤 Dohrávám '+added+' '+(added===1?'fotku':'fotek')+' z minula…', 3500); }
+    if(added){ _updateUploadBadge(); _processPhotoQueue(); showToast('📤 Dohrávám '+added+' '+_czPlural(added,'fotku','fotky','fotek')+' z minula…', 3500); }
   });
 }
 
+// České skloňování počtu (1 → one, 2–4 → few, 0/5+ → many)
+function _czPlural(n, one, few, many){ n=Math.abs(n); if(n===1) return one; if(n>=2 && n<=4) return few; return many; }
 function _updateUploadBadge(){
   var q = window._photoQueue;
   var n = q.length + (window._photoUploading ? 1 : 0);
@@ -6458,11 +6468,11 @@ function _updateUploadBadge(){
   }
   if(failing){
     b.style.display = 'none';
-    w.innerHTML = '⚠️ '+n+' '+(n===1?'fotka se zatím NEULOŽILA':'fotek se zatím NEULOŽILO')+' na server – zkouším to dál.<br>Fotky jsou bezpečně uložené v telefonu a nahrají se samy, až server pojede. <b>Neztratí se.</b>';
+    w.innerHTML = '⚠️ '+n+' '+_czPlural(n,'fotka se zatím NEULOŽILA','fotky se zatím NEULOŽILY','fotek se zatím NEULOŽILO')+' na server – zkouším to dál.<br>Fotky jsou bezpečně uložené v telefonu a nahrají se samy, až server pojede. <b>Neztratí se.</b>';
     w.style.display = 'block';
   } else {
     w.style.display = 'none';
-    if(n > 0){ b.textContent = '⏳ Nahrávám ' + n + (n===1?' fotku…':' fotky…'); b.style.display = 'block'; }
+    if(n > 0){ b.textContent = '⏳ Nahrávám ' + n + ' ' + _czPlural(n,'fotku','fotky','fotek') + '…'; b.style.display = 'block'; }
     else { b.style.display = 'none'; }
   }
 }
