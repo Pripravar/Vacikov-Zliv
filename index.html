@@ -118,8 +118,9 @@ body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui
 #btn-fabmore { bottom:144px; font-size:26px; transition:transform .25s; }
 body.fab-open #btn-fabmore { transform:rotate(90deg); background:var(--accent); color:#fff; }
 #btn-home-fab { left:16px; right:auto; bottom:24px; }
-#btn-report { position:fixed; left:0; top:50%; transform:translateY(-50%); z-index:9600; width:40px; height:46px; border-radius:0 12px 12px 0; background:var(--panel2); border:1px solid var(--border); border-left:none; color:var(--text); font-size:20px; cursor:grab; display:flex; align-items:center; justify-content:center; box-shadow:2px 2px 10px rgba(0,0,0,.4); touch-action:none; }
-#btn-report.dragging { cursor:grabbing; opacity:.85; box-shadow:0 6px 18px rgba(0,0,0,.55); }
+#btn-report { position:fixed; left:0; top:50%; transform:translateY(-50%); z-index:9600; width:40px; height:46px; border-radius:0 12px 12px 0; background:var(--panel2); border:1px solid var(--border); border-left:none; color:var(--text); font-size:20px; cursor:grab; display:flex; align-items:center; justify-content:center; box-shadow:2px 2px 10px rgba(0,0,0,.4); opacity:.72; touch-action:none; }
+#btn-report:hover { opacity:1; }
+#btn-report.dragging { cursor:grabbing; opacity:1; box-shadow:0 6px 18px rgba(0,0,0,.55); }
 #btn-report.free { border-radius:12px; border-left:1px solid var(--border); }
 #btn-report .task-badge { position:absolute; top:-4px; right:-6px; background:#e53e3e; color:#fff; font-size:10px; font-weight:700; border-radius:9px; padding:1px 5px; min-width:16px; text-align:center; display:none; }
 #btn-report .task-badge.show { display:block; }
