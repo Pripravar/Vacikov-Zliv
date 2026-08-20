@@ -782,7 +782,7 @@ textarea.note-field { min-height:80px; resize:vertical; }
 .gallery-shared-badge { position:absolute; top:4px; right:4px; background:#10b981; color:#fff; font-size:9px; font-weight:800; letter-spacing:.3px; padding:2px 6px; border-radius:6px; z-index:3; box-shadow:0 1px 3px rgba(0,0,0,.4); }
 .gallery-shared-badge-inv { background:#8b5cf6; }
 /* zdroj fotky (samostatné) – vlevo nahoře, jantar=import, tyrkys=app; schová se v režimu výběru (kolize s ✓) */
-.gallery-src-badge { position:absolute; top:4px; left:4px; font-size:11px; line-height:1; padding:2px 5px; border-radius:6px; z-index:2; box-shadow:0 1px 3px rgba(0,0,0,.45); }
+.gallery-src-badge { position:absolute; bottom:4px; left:4px; font-size:11px; line-height:1; padding:2px 5px; border-radius:6px; z-index:3; box-shadow:0 1px 3px rgba(0,0,0,.45); }
 .gallery-src-badge.src-import { background:#f59e0b; }
 .gallery-src-badge.src-app { background:#0891b2; }
 #gallery-grid.selectmode .gallery-src-badge { display:none; }
@@ -4641,7 +4641,11 @@ function _fsBackdropClick(event){
   });
 })();
 
+// Vysouvací menu „Možnosti“ u otevřené fotky (sjednoceno se šablonou)
+function toggleFsMenu(){ var m=document.getElementById('photo-fs-menu'); if(!m) return; var open=(m.style.display!=='none' && m.style.display!==''); m.style.display=open?'none':'flex'; }
+function closeFsMenu(){ var m=document.getElementById('photo-fs-menu'); if(m) m.style.display='none'; }
 function closePhotoFs() {
+  closeFsMenu();
   document.getElementById('photo-fs').classList.remove('open');
   _photoFsKey = null;
   _photoFsItem = null;
@@ -11094,15 +11098,19 @@ function copyDiaryExport(){
   <button id="photo-fs-prev" onclick="event.stopPropagation();navigateFs(-1)" style="display:none;position:absolute;left:6px;top:50%;transform:translateY(-50%);z-index:2;background:rgba(0,0,0,.5);color:#fff;border:none;width:44px;height:64px;border-radius:10px;font-size:26px;cursor:pointer;align-items:center;justify-content:center;">‹</button>
   <button id="photo-fs-next" onclick="event.stopPropagation();navigateFs(1)" style="display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);z-index:2;background:rgba(0,0,0,.5);color:#fff;border:none;width:44px;height:64px;border-radius:10px;font-size:26px;cursor:pointer;align-items:center;justify-content:center;">›</button>
   <img id="photo-fs-img" src="" style="max-width:100%;max-height:calc(100% - 60px);object-fit:contain;">
-  <div id="photo-fs-bar" style="position:absolute;bottom:0;left:0;right:0;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;padding:10px;padding-bottom:calc(10px + env(safe-area-inset-bottom));background:rgba(0,0,0,0.5);" onclick="event.stopPropagation()">
-    <button id="photo-fs-save" onclick="downloadCurrentFsPhoto()" style="background:var(--accent2);color:#0f3460;border:none;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">⬇ Stáhnout s datem</button>
-    <a id="photo-fs-open" href="#" target="_blank" rel="noopener" style="background:#1565c0;color:#fff;padding:8px 14px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700;">&#128247; Otevřít</a>
-    <button id="photo-fs-soedit" onclick="editPhotoSO()" style="display:none;background:var(--panel2);color:var(--text);border:none;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">🏗️ Objekt</button>
-    <button id="photo-fs-kmedit" onclick="editPhotoKm()" style="display:none;background:var(--panel2);color:var(--text);border:none;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">📍 km</button>
-    <button id="photo-fs-share" onclick="toggleFsShareSub()" style="display:none;background:var(--panel2);color:var(--text);border:none;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">📷 Pro SUB</button>
-    <button id="photo-fs-share-inv" onclick="toggleFsShareInvestor()" style="display:none;background:var(--panel2);color:var(--text);border:none;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">🟣 Pro TDS</button>
-    <button id="photo-fs-delete" onclick="deleteStandalonePhoto()" style="display:none;background:#e94560;color:#fff;border:none;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">&#128465; Smazat</button>
-    <button onclick="closePhotoFs()" style="background:#333;color:#fff;border:none;padding:8px 14px;border-radius:8px;font-size:13px;cursor:pointer;">Zavřít</button>
+  <!-- Vysouvací menu „co s fotkou“ (skryté; otevře ⋯ Možnosti) – sjednoceno se šablonou -->
+  <div id="photo-fs-menu" onclick="event.stopPropagation();closeFsMenu()" style="display:none;position:absolute;left:50%;transform:translateX(-50%);bottom:calc(64px + env(safe-area-inset-bottom));width:min(320px,92vw);background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:8px;flex-direction:column;gap:6px;z-index:8;box-shadow:0 8px 28px rgba(0,0,0,.65);">
+    <button id="photo-fs-save" onclick="downloadCurrentFsPhoto()" style="text-align:left;background:var(--panel2);color:var(--text);border:1px solid var(--border);padding:12px 14px;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer;min-height:48px;">⬇ Stáhnout s datem</button>
+    <a id="photo-fs-open" href="#" target="_blank" rel="noopener" style="text-align:left;background:var(--panel2);color:var(--text);border:1px solid var(--border);padding:12px 14px;border-radius:9px;text-decoration:none;font-size:15px;font-weight:700;min-height:48px;display:flex;align-items:center;">&#128247; Otevřít v prohlížeči</a>
+    <button id="photo-fs-soedit" onclick="editPhotoSO()" style="display:none;text-align:left;background:var(--panel2);color:var(--text);border:1px solid var(--border);padding:12px 14px;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer;min-height:48px;">🏗️ Přeřadit (objekt SO)</button>
+    <button id="photo-fs-kmedit" onclick="editPhotoKm()" style="display:none;text-align:left;background:var(--panel2);color:var(--text);border:1px solid var(--border);padding:12px 14px;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer;min-height:48px;">📍 Přeřadit / smazat staničení (km)</button>
+    <button id="photo-fs-share" onclick="toggleFsShareSub()" style="display:none;text-align:left;background:var(--panel2);color:var(--text);border:1px solid var(--border);padding:12px 14px;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer;min-height:48px;">📷 Pro SUB</button>
+    <button id="photo-fs-share-inv" onclick="toggleFsShareInvestor()" style="display:none;text-align:left;background:var(--panel2);color:var(--text);border:1px solid var(--border);padding:12px 14px;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer;min-height:48px;">🟣 Pro TDS</button>
+    <button id="photo-fs-delete" onclick="deleteStandalonePhoto()" style="display:none;text-align:left;background:rgba(233,69,96,0.15);color:#e94560;border:1px solid #e94560;padding:12px 14px;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer;min-height:48px;">&#128465; Smazat</button>
+  </div>
+  <div id="photo-fs-bar" style="position:absolute;bottom:0;left:0;right:0;display:flex;gap:10px;justify-content:center;padding:10px;padding-bottom:calc(10px + env(safe-area-inset-bottom));background:rgba(0,0,0,0.6);" onclick="event.stopPropagation()">
+    <button id="photo-fs-menu-btn" onclick="toggleFsMenu()" style="flex:1;max-width:240px;background:var(--accent2);color:#0f3460;border:none;padding:13px 14px;border-radius:11px;font-size:15px;font-weight:700;cursor:pointer;min-height:48px;">⋯ Možnosti</button>
+    <button onclick="closePhotoFs()" style="flex:1;max-width:150px;background:#333;color:#fff;border:none;padding:13px 14px;border-radius:11px;font-size:15px;cursor:pointer;min-height:48px;">✕ Zavřít</button>
   </div>
 </div>
 
