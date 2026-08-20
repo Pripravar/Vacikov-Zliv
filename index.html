@@ -38,6 +38,8 @@
 <script src="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
+    /* Viditelné zaškrtnutí práv i na iOS (tmavý motiv) – bez toho je fajfka neviditelná */
+    input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 :root {
   --bg:#1a1a2e; --panel:#16213e; --panel2:#0f3460;
   --accent:#e94560; --accent2:#f5a623;
