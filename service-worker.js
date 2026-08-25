@@ -29,6 +29,7 @@ try {
       badge: 'icon-192.png',
       data: payload.data || {}
     });
+    try{ if(self.navigator && self.navigator.setAppBadge) self.navigator.setAppBadge(); }catch(e){}   // odznak na ikoně i při zavřené appce
   });
 } catch(e){ /* messaging nemusí být dostupný v tomto kontextu */ }
 
