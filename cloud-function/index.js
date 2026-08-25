@@ -60,6 +60,13 @@ exports.sendTaskNotifications = functions
     }
 
     // Odstranit duplicity
+    // typ:'chat' – zpráva v interním chatu; příjemci = členové kanálu (bez pisatele), přijdou v záznamu
+    if(rec.typ === 'chat') {
+      title = '💬 ' + (rec.kanalNazev || 'Chat');
+      body = (rec.zadalName || 'Někdo') + ': ' + (rec.komentText || '');
+      recipientUids = (rec.recipientUids || []).filter(Boolean);
+    }
+
     recipientUids = [...new Set(recipientUids)];
 
     if(recipientUids.length === 0) {
@@ -70,11 +77,14 @@ exports.sendTaskNotifications = functions
     // Najít FCM tokeny příjemců
     const usersSnap = await db.ref('/uzivatele').once('value');
     const users = usersSnap.val() || {};
-    const tokens = [];
+    const rawTokens = [];
     recipientUids.forEach(uid => {
       const u = users[uid];
-      if(u && u.fcmToken) tokens.push(u.fcmToken);
+      if(!u) return;
+      if(u.fcmToken) rawTokens.push(u.fcmToken);
+      if(u.fcmTokens) Object.keys(u.fcmTokens).forEach(k => { if(u.fcmTokens[k]) rawTokens.push(u.fcmTokens[k]); });
     });
+    const tokens = [...new Set(rawTokens)];
 
     if(tokens.length === 0) {
       console.log('Žádné FCM tokeny u příjemců.');
@@ -104,9 +114,9 @@ exports.sendTaskNotifications = functions
                      err.code === 'messaging/registration-token-not-registered')) {
             // Najít uživatele, kdo má tento token, a smazat ho
             Object.keys(users).forEach(uid => {
-              if(users[uid] && users[uid].fcmToken === badToken) {
-                cleanupPromises.push(db.ref('/uzivatele/' + uid + '/fcmToken').remove());
-              }
+              const u = users[uid]; if(!u) return;
+              if(u.fcmToken === badToken) cleanupPromises.push(db.ref('/uzivatele/' + uid + '/fcmToken').remove());
+              if(u.fcmTokens) Object.keys(u.fcmTokens).forEach(k => { if(u.fcmTokens[k] === badToken) cleanupPromises.push(db.ref('/uzivatele/' + uid + '/fcmTokens/' + k).remove()); });
             });
           }
         }

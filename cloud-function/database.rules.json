@@ -11,6 +11,8 @@
         "photo":    { ".write": "auth != null && (auth.uid === $uid || auth.token.email === 'arasid33@gmail.com' || root.child('uzivatele').child(auth.uid).child('role').val() === 'admin') && root.child('uzivatele').child(auth.uid).child('blocked').val() !== true" },
         "lastSeen": { ".write": "auth != null && (auth.uid === $uid || auth.token.email === 'arasid33@gmail.com' || root.child('uzivatele').child(auth.uid).child('role').val() === 'admin') && root.child('uzivatele').child(auth.uid).child('blocked').val() !== true" },
         "fcmToken": { ".write": "auth != null && (auth.uid === $uid || auth.token.email === 'arasid33@gmail.com' || root.child('uzivatele').child(auth.uid).child('role').val() === 'admin') && root.child('uzivatele').child(auth.uid).child('blocked').val() !== true" },
+        "fcmTokens": { ".write": "auth != null && auth.uid === $uid" },
+        "chatSeen":  { ".write": "auth != null && auth.uid === $uid" },
 
         "approved":  { ".write": "(auth.token.email === 'arasid33@gmail.com' || root.child('uzivatele').child(auth.uid).child('role').val() === 'admin') || (auth != null && auth.uid === $uid && newData.val() === false)" },
         "kategorie": { ".write": "(auth.token.email === 'arasid33@gmail.com' || root.child('uzivatele').child(auth.uid).child('role').val() === 'admin') && root.child('uzivatele').child(auth.uid).child('blocked').val() !== true" },

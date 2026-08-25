@@ -21,7 +21,15 @@ firebase.initializeApp({
 
 try {
   var messaging = firebase.messaging();
-  messaging.onBackgroundMessage(function(payload){
+  /* Odznáček na ikoně na ploše – trvalý čítač (přežije zavření appky). Ukládá se přes Cache API;
+   appka po otevření pošle {type:'clearBadge'} → vynulujeme. Číslo (ne prázdný dot) se na iOS zobrazí spolehlivěji. */
+async function _badgeGet(){ try{ var c=await caches.open('ms-badge'); var r=await c.match('count'); return r ? (parseInt(await r.text(),10)||0) : 0; }catch(e){ return 0; } }
+async function _badgePut(n){ try{ var c=await caches.open('ms-badge'); await c.put('count', new Response(String(n))); }catch(e){} }
+async function _bumpAppBadge(){ try{ var n=(await _badgeGet())+1; await _badgePut(n); if(self.navigator && self.navigator.setAppBadge) await self.navigator.setAppBadge(n); }catch(e){} }
+async function _clearAppBadgeSW(){ try{ await _badgePut(0); if(self.navigator && self.navigator.clearAppBadge) await self.navigator.clearAppBadge(); }catch(e){} }
+self.addEventListener('message', function(e){ if(e.data && e.data.type==='clearBadge'){ if(e.waitUntil) e.waitUntil(_clearAppBadgeSW()); else _clearAppBadgeSW(); } });
+
+messaging.onBackgroundMessage(function(payload){
     var n = payload.notification || {};
     self.registration.showNotification(n.title || 'II/176 Vacíkov–Zliv', {
       body: n.body || '',
@@ -29,7 +37,7 @@ try {
       badge: 'icon-192.png',
       data: payload.data || {}
     });
-    try{ if(self.navigator && self.navigator.setAppBadge) self.navigator.setAppBadge(); }catch(e){}   // odznak na ikoně i při zavřené appce
+    _bumpAppBadge();   // odznak na ikoně i při zavřené appce
   });
 } catch(e){ /* messaging nemusí být dostupný v tomto kontextu */ }
 
