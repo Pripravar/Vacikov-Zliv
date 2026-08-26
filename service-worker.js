@@ -43,10 +43,13 @@ messaging.onBackgroundMessage(function(payload){
 
 self.addEventListener('notificationclick', function(e){
   e.notification.close();
+  var d = e.notification.data || {};
+  var hash=''; if(d.taskId) hash='#task='+encodeURIComponent(d.taskId); else if(d.kanalId) hash='#chat='+encodeURIComponent(d.kanalId); else if(d.typ==='chat') hash='#chat'; else if(d.fotoKey) hash='#foto='+encodeURIComponent(d.fotoKey);
+  var url='./'+hash;
   e.waitUntil(
     clients.matchAll({type:'window', includeUncontrolled:true}).then(function(cl){
-      for (var i=0;i<cl.length;i++){ if('focus' in cl[i]) return cl[i].focus(); }
-      if(clients.openWindow) return clients.openWindow('./');
+      for (var i=0;i<cl.length;i++){ var c=cl[i]; if('focus' in c){ c.focus(); if('navigate' in c && hash) c.navigate(url); return; } }
+      if(clients.openWindow) return clients.openWindow(url);
     })
   );
 });
