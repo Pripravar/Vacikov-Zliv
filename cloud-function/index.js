@@ -395,3 +395,77 @@ exports.backupDatabase = functions
     }
     return null;
   });
+
+exports.extractDodaciList = functions
+  .region('europe-west1')
+  .runWith({ secrets: ['ANTHROPIC_API_KEY'], timeoutSeconds: 60, memory: '512MB' })
+  .https.onRequest(async (req, res) => {
+    res.set('Access-Control-Allow-Origin', ALLOW_ORIGIN);
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+    if(req.method === 'OPTIONS') { res.status(204).send(''); return; }
+    if(req.method !== 'POST')    { res.status(405).json({ error: 'Jen POST' }); return; }
+
+    const authHeader = req.get('Authorization') || '';
+    const idToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+    if(!idToken) { res.status(401).json({ error: 'Chybí přihlášení' }); return; }
+    try { await admin.auth().verifyIdToken(idToken); }
+    catch(e) { res.status(401).json({ error: 'Neplatné přihlášení' }); return; }
+
+    const body = req.body || {};
+    let image = String(body.image || '').replace(/^data:[^;]+;base64,/, '');
+    const mime = /png/i.test(String(body.mime || '')) ? 'image/png' : 'image/jpeg';
+    if(!image || image.length > 8 * 1024 * 1024) {
+      res.status(400).json({ error: 'Chybí nebo příliš velký obrázek' }); return;
+    }
+
+    const extra = Array.isArray(body.extra) ? body.extra.slice(0,8) : [];
+    const extraKeys = extra.map(function(e){ return String((e&&e.key)||'').replace(/[^a-zA-Z0-9_]/g,'').slice(0,32); }).filter(Boolean);
+    const extraJson = extraKeys.map(function(k){ return '"'+k+'":""'; }).join(',');
+    const extraDesc = extra.map(function(e){ var k=String((e&&e.key)||'').replace(/[^a-zA-Z0-9_]/g,'').slice(0,32); return k?(k+'='+String((e&&e.hint)||'').slice(0,140)):''; }).filter(Boolean).join('; ');
+    const PROMPT = 'Na obrázku je DODACÍ LIST (dodávka materiálu na stavbu silnice v ČR). '
+      + 'Vytáhni údaje a vrať POUZE JSON (žádný jiný text) přesně v tomto tvaru:\n'
+      + '{"dodavatel":"","cisloDL":"","datum":"","spz":"","kvalita":"","polozky":[{"co":"","specifikace":"","mnozstvi":"","jednotka":""}]' + (extraJson ? (','+extraJson) : '') + '}\n'
+      + 'Význam: dodavatel=kdo dodal (firma/závod/obalovna); cisloDL=číslo dodacího listu; datum=datum na dokladu ve formátu RRRR-MM-DD; spz=SPZ vozidla pokud je uvedena. '
+      + 'polozky=seznam VŠECH dodaných položek na dokladu (u betonu obvykle jedna, u stavebnin i více řádků). Každá položka: co=materiál/zboží stručně (Beton, Obalované kamenivo, Ocel…); specifikace=třída/pevnost/značka – u betonu VŽDY plné značení (C30/37 XF4 XC4 Cl0,4 Dmax22 S4), u oceli B500B apod.; mnozstvi=jen číselná hodnota; jednotka=t/m3/ks/m/kg. '
+      + (extraDesc ? ('Dále z dokladu vytáhni tyto údaje: ' + extraDesc + '. ') : '')
+      + 'kvalita=posuď čitelnost FOTKY dokladu: "ok" když jde dobře přečíst, "rozmazane" když jen částečně, "necitelne" když je rozmazaná/tmavá/z úhlu a NEJDE spolehlivě přečíst (uživatel má vyfotit znovu). '
+      + 'DŮLEŽITÉ: pokud údaj na dokladu JE, ale kvůli rozmazání/kvalitě ho NEJDE spolehlivě přečíst, napiš "?" (otazník) MÍSTO hádání. Prázdný řetězec dej jen když údaj na dokladu VŮBEC není. V polozky vrať aspoň jednu položku. Nic jiného nepiš.';
+
+    try {
+      const aiResp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': process.env.ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-5',
+          max_tokens: 1024,
+          messages: [{ role: 'user', content: [
+            { type: 'image', source: { type: 'base64', media_type: mime, data: image } },
+            { type: 'text', text: PROMPT }
+          ]}]
+        })
+      });
+      const data = await aiResp.json();
+      if(!aiResp.ok) {
+        console.error('Anthropic err:', aiResp.status, JSON.stringify(data));
+        res.status(502).json({ error: (data && data.error && data.error.message) || 'AI chyba' }); return;
+      }
+      let text = '';
+      try { text = (data.content || []).map(function(b){ return b && b.type === 'text' ? b.text : ''; }).join(''); } catch(e){}
+      let parsed = {};
+      try { const m = text.match(/\{[\s\S]*\}/); if(m) parsed = JSON.parse(m[0]) || {}; } catch(e){ console.warn('parse JSON z AI selhal:', e && e.message); }
+      const polozky = Array.isArray(parsed.polozky) ? parsed.polozky.map(function(it){ it=it||{}; return { co:String(it.co||''), specifikace:String(it.specifikace||''), mnozstvi:String(it.mnozstvi||''), jednotka:String(it.jednotka||'') }; }).filter(function(it){ return it.co||it.specifikace||it.mnozstvi||it.jednotka; }) : [];
+      const first = polozky[0] || {};
+      const fields = { co:String(first.co||''), specifikace:String(first.specifikace||''), mnozstvi:String(first.mnozstvi||''), jednotka:String(first.jednotka||''), dodavatel:String(parsed.dodavatel||''), cisloDL:String(parsed.cisloDL||''), datum:String(parsed.datum||''), spz:String(parsed.spz||'') };
+      const extraVals = {}; extraKeys.forEach(function(k){ if(parsed[k] != null) extraVals[k] = String(parsed[k]); });
+      res.status(200).json({ ok: true, fields: fields, polozky: polozky, extra: extraVals, kvalita: String(parsed.kvalita||''), usage: data.usage || null });
+    } catch(e) {
+      console.error('extractDodaciList výjimka:', e);
+      res.status(500).json({ error: 'Chyba serveru při AI' });
+    }
+  });
+
