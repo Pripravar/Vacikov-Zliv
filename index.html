@@ -5398,7 +5398,7 @@ function deleteStandalonePhoto() {
     .catch(function() { showToast('❌ Chyba mazání', 2500); });
 }
 function lockViewport()  { document.querySelector('meta[name=viewport]').setAttribute('content','width=device-width, initial-scale=1.0, maximum-scale=1.0'); }
-function unlockViewport(){ document.querySelector('meta[name=viewport]').setAttribute('content','width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'); }
+function unlockViewport(){ document.querySelector('meta[name=viewport]').setAttribute('content','width=device-width, initial-scale=1.0, maximum-scale=5.0'); }
 
 
 function deleteNotePhotoByEl(btn, noteId, photoIdx) {
