@@ -4827,6 +4827,7 @@ function navigateFs(dir){
   var it = galleryCurrentItems[ni];
   _renderFsItem(it.url, it.fbKey || null, it);
   _updateFsNav();
+  try{ var _rb=document.getElementById('photo-fs-report-box'); if(_rb && _rb.style.display==='block') _pfrFill(false); }catch(e){}
 }
 function _updateFsNav(){
   var prev = document.getElementById('photo-fs-prev');
@@ -6913,10 +6914,12 @@ function applyGalleryFilters(items){
   var dtDo = (document.getElementById('gfilt-date-do').value || '').trim();
   var aut  = (document.getElementById('gfilt-author').value || '').trim();
   var repM = (document.getElementById('gfilt-report')||{}).value||'';
+  var zbvSel = (document.getElementById('gfilt-zbv')||{}).value||'';
   var subEl = document.getElementById('gfilt-sub');
   var subKind = subEl ? (subEl.value || '') : '';
   return items.filter(function(it){
     if(repM){ if(!(it.report && it.report[repM])) return false; }
+    if(zbvSel){ if(!it.zbv) return false; if(zbvSel!=='__vse__' && (it.zbvPopis||'')!==zbvSel) return false; }
     // TVRDÝ BACKSTOP: omezená kategorie (sub/investor) vidí jen fotky sdílené jí
     if(!canViewPhoto(it)) return false;
     var isSubPhoto = (it.zdroj === 'SUB' || it.sub);
@@ -6961,6 +6964,14 @@ function fillGalleryAuthorOptions(items){
 }
 
 // Naplní výběr měsíčních zpráv jen měsíci, které v datech reálně existují (ať uživatel nehádá).
+function fillGalleryZbvOptions(items){
+  var sel=document.getElementById('gfilt-zbv'); if(!sel || sel.tagName!=='SELECT') return;
+  var cur=sel.value; var seen={}, arr=[];
+  (items||[]).forEach(function(it){ if(it && it.zbv){ var p=(it.zbvPopis||'').trim(); if(p && !seen[p]){ seen[p]=1; arr.push(p); } } });
+  arr.sort(function(a,b){ return a.localeCompare(b,'cs'); });
+  sel.innerHTML='<option value="">— vše —</option><option value="__vse__">📐 Všechny ZBV</option>'+arr.map(function(p){ return '<option value="'+escapeHtml(p)+'">📐 '+escapeHtml(p)+'</option>'; }).join('');
+  if(cur){ sel.value=cur; if(sel.value!==cur) sel.value=''; }
+}
 function fillGalleryReportOptions(items){
   var sel = document.getElementById('gfilt-report');
   if(!sel || sel.tagName !== 'SELECT') return;
@@ -6994,6 +7005,7 @@ function clearGalleryFilters(){
   document.getElementById('gfilt-date-do').value = '';
   document.getElementById('gfilt-author').value = '';
   var repEl2=document.getElementById('gfilt-report'); if(repEl2) repEl2.value='';
+  var zbvEl2=document.getElementById('gfilt-zbv'); if(zbvEl2) zbvEl2.value='';
   var gs=document.getElementById('gfilt-sub'); if(gs && !gs.disabled) gs.value='';
   renderGallery();
 }
@@ -7010,12 +7022,20 @@ function _repFmtMonth(m){ if(!m) return ''; var p=(m||'').split('-'); return p.l
 function _repNormMonth(s){ s=(s||'').trim(); var m=s.match(/^(\d{4})-(\d{1,2})$/); if(m) return m[1]+'-'+String(m[2]).padStart(2,'0'); m=s.match(/^(\d{1,2})[\/.](\d{4})$/); if(m) return m[2]+'-'+String(m[1]).padStart(2,'0'); return ''; }
 function _repMonthDefaultFor(it){ try{ var d=itemDateYmd(it); if(d) return d.slice(0,7); }catch(e){} return _repMonthNow(); }
 
+function _repSoKmPrefix(it){ if(!it) return ''; var so=(it.soList&&it.soList.length)?it.soList.join(', '):(it.so||''); var p=[]; if(so) p.push(so); if(it.km) p.push('km '+it.km); return p.length?(p.join(', ')+' — '):''; }
+function _pfrFill(autoAdd){
+  if(!_photoFsItem) return;
+  var m=_repMonthDefaultFor(_photoFsItem);
+  var mEl=document.getElementById('pfr-month'); if(mEl) mEl.value=m;
+  if(autoAdd){ var rep=_photoFsItem.report||{}; if(!rep[m]){ rep[m]=true; _photoFsItem.report=rep; try{ db.ref('standalone_photos/'+_photoFsKey+'/report/'+m).set(true); }catch(e){} if(document.getElementById('gallery-modal').classList.contains('open')) renderGallery(); } }
+  var pEl=document.getElementById('pfr-popis'); if(pEl){ var ex=(_photoFsItem && _photoFsItem.reportPopis)||''; pEl.value = ex || _repSoKmPrefix(_photoFsItem); }
+  _renderPfrMonths();
+}
 function openPhotoReportBox(){
   if(!_photoFsKey || !window.currentUser){ showToast('Označit lze jen fotky po přihlášení',2500); return; }
   if(typeof closeFsMenu==='function') closeFsMenu();
-  var mEl=document.getElementById('pfr-month'); if(mEl && !mEl.value) mEl.value=_repMonthDefaultFor(_photoFsItem);
-  var pEl=document.getElementById('pfr-popis'); if(pEl) pEl.value=(_photoFsItem && _photoFsItem.reportPopis)||'';
-  _renderPfrMonths();
+  _pfrFill(true);
+  showToast('📄 Ve zprávě '+_repFmtMonth(_repMonthDefaultFor(_photoFsItem))+' – dopiš popis a dej Uložit',2600);
   var b=document.getElementById('photo-fs-report-box'); if(b) b.style.display='block';
 }
 function closePhotoReportBox(){ var b=document.getElementById('photo-fs-report-box'); if(b) b.style.display='none'; }
@@ -7036,9 +7056,62 @@ function pfrToggleMonth(){
 function pfrRemoveMonth(m){ if(!_photoFsKey) return; var rep=_photoFsItem.report||{}; delete rep[m]; _photoFsItem.report=rep; db.ref('standalone_photos/'+_photoFsKey+'/report/'+m).set(null); _renderPfrMonths(); if(document.getElementById('gallery-modal').classList.contains('open')) renderGallery(); }
 function savePhotoReport(){
   if(!_photoFsKey) return; var pEl=document.getElementById('pfr-popis'); var v=pEl?(pEl.value||'').trim():'';
-  db.ref('standalone_photos/'+_photoFsKey+'/reportPopis').set(v||null).then(function(){ _photoFsItem.reportPopis=v; showToast('📄 Popis uložen',1500); if(document.getElementById('gallery-modal').classList.contains('open')) renderGallery(); });
+  var m=_repMonthDefaultFor(_photoFsItem); var rep=_photoFsItem.report||{}; var addMonth=!rep[m];
+  var ops=[ db.ref('standalone_photos/'+_photoFsKey+'/reportPopis').set(v||null) ];
+  if(addMonth){ rep[m]=true; _photoFsItem.report=rep; ops.push(db.ref('standalone_photos/'+_photoFsKey+'/report/'+m).set(true)); }
+  Promise.all(ops).then(function(){ _photoFsItem.reportPopis=v; showToast('📄 Uloženo'+(addMonth?(' + do zprávy '+_repFmtMonth(m)):''),1800); _renderPfrMonths(); if(document.getElementById('gallery-modal').classList.contains('open')) renderGallery(); });
 }
 function pfrVoice(){ _voiceToField('pfr-popis'); }
+// ══ ZBV (změna během výstavby) – interní tag fotky + stručný popis (našeptává). NEovlivňuje viditelnost SUB/TDS. ══
+function _zbvFillDatalist(){
+  var dl=document.getElementById('dl-zbv-popis'); if(!dl) return;
+  var seen={}, vals=[];
+  function scan(arr){ if(!arr) return; var list=arr.length!=null?arr:Object.keys(arr).map(function(k){return arr[k];}); list.forEach(function(it){ var p=(it&&it.zbvPopis||'').trim(); if(p&&!seen[p]){seen[p]=1;vals.push(p);} }); }
+  try{ scan(window.galleryCurrentItems); }catch(e){}
+  try{ scan(window._fotoMapaPhotos); }catch(e){}
+  vals.sort(function(a,b){ return a.localeCompare(b,'cs'); });
+  dl.innerHTML=vals.map(function(v){ return '<option value="'+escapeHtml(v)+'"></option>'; }).join('');
+}
+function openZbvBox(){
+  if(!_photoFsKey || !window.currentUser){ showToast('ZBV lze označit jen u fotky po přihlášení',2800); return; }
+  if(typeof hasPerm==='function' && !hasPerm('zbv')){ showToast('📐 ZBV Ti admin nepovolil',2800); return; }
+  if(typeof closeFsMenu==='function') closeFsMenu();
+  _zbvFillDatalist();
+  var inp=document.getElementById('zbv-popis'); if(inp) inp.value=(_photoFsItem && _photoFsItem.zbvPopis)||'';
+  var st=document.getElementById('zbv-status'); if(st) st.textContent=(_photoFsItem && _photoFsItem.zbv)?'✓ Fotka je označená jako ZBV.':'Napiš stručný popis a ulož – fotka se přidá do ZBV.';
+  var rem=document.getElementById('zbv-remove-btn'); if(rem) rem.style.display=(_photoFsItem && _photoFsItem.zbv)?'block':'none';
+  var box=document.getElementById('photo-fs-zbv-box'); if(box) box.style.display='block';
+  if(window.visualViewport && !window.__zbvVpBound){ window.__zbvVpBound=true; window.visualViewport.addEventListener('resize', _zbvVpAdjust); window.visualViewport.addEventListener('scroll', _zbvVpAdjust); }
+  setTimeout(function(){ try{ inp.focus(); }catch(e){} _zbvVpAdjust(); }, 60);
+  setTimeout(_zbvVpAdjust, 400);
+}
+function closeZbvBox(){ var box=document.getElementById('photo-fs-zbv-box'); if(box){ box.style.display='none'; box.style.bottom='calc(64px + env(safe-area-inset-bottom))'; } }
+function _zbvVpAdjust(){
+  var box=document.getElementById('photo-fs-zbv-box'); if(!box || box.style.display==='none') return;
+  var vv=window.visualViewport;
+  if(!vv){ box.style.bottom='calc(64px + env(safe-area-inset-bottom))'; return; }
+  var kb=Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+  box.style.bottom = (kb>0 ? (kb+8)+'px' : 'calc(64px + env(safe-area-inset-bottom))');
+}
+function saveZbv(){
+  if(!_photoFsKey) return;
+  if(typeof hasPerm==='function' && !hasPerm('zbv')){ showToast('📐 ZBV Ti admin nepovolil',2800); return; }
+  var inp=document.getElementById('zbv-popis'); var v=inp?(inp.value||'').trim():'';
+  if(!v){ showToast('Napiš prosím stručný popis ZBV',2600); return; }
+  db.ref('standalone_photos/'+_photoFsKey).update({ zbv:true, zbvPopis:v }).then(function(){
+    if(_photoFsItem){ _photoFsItem.zbv=true; _photoFsItem.zbvPopis=v; }
+    showToast('📐 Uloženo do ZBV',1600); closeZbvBox();
+    if(document.getElementById('gallery-modal').classList.contains('open')) renderGallery();
+  }).catch(function(e){ showToast('❌ '+((e&&e.code)||'chyba'),3000); });
+}
+function removeZbv(){
+  if(!_photoFsKey) return;
+  db.ref('standalone_photos/'+_photoFsKey).update({ zbv:null, zbvPopis:null }).then(function(){
+    if(_photoFsItem){ _photoFsItem.zbv=false; delete _photoFsItem.zbvPopis; }
+    showToast('Odebráno ze ZBV',1500); closeZbvBox();
+    if(document.getElementById('gallery-modal').classList.contains('open')) renderGallery();
+  });
+}
 
 // Diktování do textového pole (Web Speech API). iOS Safari nemusí podporovat → hint na mikrofon klávesnice.
 function _voiceToField(fieldId){
@@ -7263,7 +7336,7 @@ function _galleryItemEl(item) {
     })(item);
     div.appendChild(badge);
   }
-  if(item.report && Object.keys(item.report).some(function(m){return item.report[m];})){ var repB=document.createElement('div'); repB.textContent='📄'; repB.title='V měsíční zprávě: '+Object.keys(item.report).filter(function(m){return item.report[m];}).sort().map(_repFmtMonth).join(', '); repB.style.cssText='position:absolute;top:4px;right:4px;background:#10b981;color:#fff;font-size:11px;font-weight:800;padding:1px 5px;border-radius:6px;z-index:3;box-shadow:0 1px 3px rgba(0,0,0,.4);'; div.appendChild(repB); }
+  if(item.report && Object.keys(item.report).some(function(m){return item.report[m];})){ var repB=document.createElement('div'); repB.textContent='📄'; repB.title='V měsíční zprávě: '+Object.keys(item.report).filter(function(m){return item.report[m];}).sort().map(_repFmtMonth).join(', '); repB.style.cssText='position:absolute;top:4px;right:4px;background:#10b981;color:#fff;font-size:11px;font-weight:800;padding:1px 5px;border-radius:6px;z-index:3;box-shadow:0 1px 3px rgba(0,0,0,.4);'; div.appendChild(repB); } if(item.zbv){ var zbvB=document.createElement('div'); zbvB.textContent='ZBV'; zbvB.title='ZBV'+(item.zbvPopis?(': '+item.zbvPopis):''); zbvB.style.cssText='position:absolute;top:4px;left:4px;background:#f59e0b;color:#1a1a1a;font-size:10px;font-weight:800;padding:1px 6px;border-radius:6px;z-index:3;box-shadow:0 1px 3px rgba(0,0,0,.4);'; div.appendChild(zbvB); }
   var meta = document.createElement('div');
   meta.className = 'gallery-item-meta';
   meta.textContent = (item.km ? 'km ' + item.km : '') + (item.km && (item.date || item.author) ? ' • ' : '') + (item.date || '') + (item.date && item.author ? ' • ' : '') + (item.author || '');
@@ -7344,7 +7417,7 @@ function renderGallery() {
       snap.forEach(function(ch) { var v = ch.val(); v.fbKey = ch.key; items.push(v); });
       items.reverse();
       fillGalleryAuthorOptions(items);
-      fillGalleryReportOptions(items);
+      fillGalleryReportOptions(items); fillGalleryZbvOptions(items);
       var filtered = sortGalleryItems(applyGalleryFilters(items));
       galleryCurrentItems = filtered;
       if(cnt) cnt.textContent = filtered.length + ' / ' + items.length;
@@ -7440,6 +7513,7 @@ var FEATURES = [
   {key:'katastr',   label:'🗺️ Vrstva: Katastr (KN)',      btns:[]},
   {key:'gps',       label:'🗺️ Vrstva: GPS poloha (nutná k focení)', btns:[]},
   {key:'galerie',   label:'Galerie fotek',             btns:['btn-gallery']},
+  {key:'zbv',       label:'ZBV (označit + filtrovat fotky)', btns:[]},
   {key:'pripominky',label:'Poznámky a úkoly na mapě',  btns:['btn-notes-evidence','btn-place']},
   {key:'ukoly',     label:'Úkolníček',                 btns:['btn-tasks']},
   { key:'chat',       label:'💬 Chat stavby',     btns:['btn-chat','btn-chat-fab'] },
@@ -12044,10 +12118,21 @@ function copyDiaryExport(){
   <button id="photo-fs-prev" onclick="event.stopPropagation();navigateFs(-1)" style="display:none;position:absolute;left:6px;top:50%;transform:translateY(-50%);z-index:2;background:rgba(0,0,0,.5);color:#fff;border:none;width:44px;height:64px;border-radius:10px;font-size:26px;cursor:pointer;align-items:center;justify-content:center;">‹</button>
   <button id="photo-fs-next" onclick="event.stopPropagation();navigateFs(1)" style="display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);z-index:2;background:rgba(0,0,0,.5);color:#fff;border:none;width:44px;height:64px;border-radius:10px;font-size:26px;cursor:pointer;align-items:center;justify-content:center;">›</button>
   <img id="photo-fs-img" src="" style="max-width:100%;max-height:calc(100% - 60px);object-fit:contain;">
+  <div id="photo-fs-zbv-box" onclick="event.stopPropagation()" ontouchstart="event.stopPropagation()" style="display:none;position:absolute;left:0;right:0;bottom:calc(64px + env(safe-area-inset-bottom));background:rgba(12,14,20,0.98);color:#fff;padding:10px 14px;border-top:2px solid #f59e0b;z-index:10;max-height:60vh;overflow-y:auto;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><b style="font-size:14px;color:#f59e0b;">📐 ZBV – změna během výstavby</b><span style="flex:1;"></span><button onclick="closeZbvBox()" style="background:none;border:none;color:#bbb;font-size:20px;cursor:pointer;min-height:36px;">✕</button></div>
+    <div id="zbv-status" style="font-size:12px;color:#9aa;margin-bottom:6px;"></div>
+    <input type="text" id="zbv-popis" list="dl-zbv-popis" autocomplete="off" placeholder="Stručný popis ZBV (např. přeložka plynu SO 380)" style="width:100%;box-sizing:border-box;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:11px;font-size:14px;">
+    <datalist id="dl-zbv-popis"></datalist>
+    <div style="display:flex;gap:6px;margin-top:8px;">
+      <button onclick="saveZbv()" style="flex:1;background:#f59e0b;border:none;border-radius:8px;color:#1a1a1a;padding:12px;font-weight:800;cursor:pointer;">📐 Uložit do ZBV</button>
+      <button id="zbv-remove-btn" onclick="removeZbv()" style="display:none;background:none;border:1px solid #e57373;border-radius:8px;color:#e57373;padding:0 14px;font-weight:700;cursor:pointer;min-height:46px;">Odebrat</button>
+    </div>
+  </div>
   <!-- Vysouvací menu „co s fotkou“ (skryté; otevře ⋯ Možnosti) – sjednoceno se šablonou -->
   <div id="photo-fs-menu" onclick="event.stopPropagation();closeFsMenu()" style="display:none;position:absolute;left:50%;transform:translateX(-50%);bottom:calc(64px + env(safe-area-inset-bottom));width:min(320px,92vw);background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:8px;flex-direction:column;gap:6px;z-index:8;box-shadow:0 8px 28px rgba(0,0,0,.65);">
     <button id="photo-fs-save" onclick="downloadCurrentFsPhoto()" style="text-align:left;background:var(--panel2);color:var(--text);border:1px solid var(--border);padding:12px 14px;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer;min-height:48px;">⬇ Stáhnout s datem</button>
     <button id="photo-fs-report" onclick="openPhotoReportBox()" style="text-align:left;background:var(--panel2);color:var(--text);border:1px solid var(--border);padding:12px 14px;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer;min-height:48px;">📄 Do měsíční zprávy</button>
+    <button id="photo-fs-zbv" onclick="openZbvBox()" style="text-align:left;background:var(--panel2);color:var(--text);border:1px solid var(--border);padding:12px 14px;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer;min-height:48px;">📐 Do ZBV</button>
     <a id="photo-fs-open" href="#" target="_blank" rel="noopener" style="text-align:left;background:var(--panel2);color:var(--text);border:1px solid var(--border);padding:12px 14px;border-radius:9px;text-decoration:none;font-size:15px;font-weight:700;min-height:48px;display:flex;align-items:center;">&#128247; Otevřít v prohlížeči</a>
     <button id="photo-fs-soedit" onclick="editPhotoSO()" style="display:none;text-align:left;background:var(--panel2);color:var(--text);border:1px solid var(--border);padding:12px 14px;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer;min-height:48px;">🏗️ Přeřadit (objekt SO)</button>
     <button id="photo-fs-kmedit" onclick="editPhotoKm()" style="display:none;text-align:left;background:var(--panel2);color:var(--text);border:1px solid var(--border);padding:12px 14px;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer;min-height:48px;">📍 Přeřadit / smazat staničení (km)</button>
@@ -12142,6 +12227,10 @@ function copyDiaryExport(){
           <option value="inv-od">🟣 Od TDS/investora</option>
         </select>
       </div>
+    <div style="margin-top:8px;" data-perm="zbv">
+      <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:3px;">📐 ZBV – změny během výstavby (filtr)</label>
+      <select id="gfilt-zbv" onchange="renderGallery()" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 8px;font-size:13px;"><option value="">— vše —</option><option value="__vse__">📐 Všechny ZBV</option></select>
+    </div>
     <div style="margin-top:8px;">
       <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:3px;">📄 Měsíční zpráva (album vybraných fotek)</label>
       <div style="display:flex;gap:6px;align-items:center;">
