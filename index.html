@@ -6129,7 +6129,9 @@ function openPropPdfExternal() {
     if(panel) panel.classList.add('fullscreen');
     return;
   }
-  window.open(currentPropSrc,'_blank');
+  // Otevři okno HNED v gestu (bez popup-blocku), URL doplň po resolve (soukromé soubory = Storage token URL).
+  var w = window.open('', '_blank');
+  resolveFileUrl(currentPropSrc).then(function(u){ if(w) w.location.href = u; else window.open(u, '_blank'); });
 }
 
 
@@ -7126,6 +7128,36 @@ function _voiceToField(fieldId){
   }catch(e){ showToast('🎤 Nepodařilo se spustit diktování',2500); }
 }
 
+function zbvTagSelected(){
+  var items=Object.values(gallerySelectedKeys).filter(function(it){ return it && it.fbKey; });
+  if(!items.length){ showToast('Vyber fotky z galerie',2200); return; }
+  if(!window.currentUser){ showToast('Přihlas se',2000); return; }
+  if(typeof hasPerm==='function' && !hasPerm('zbv')){ showToast('📐 ZBV Ti admin nepovolil',2800); return; }
+  if(typeof _zbvFillDatalist==='function') _zbvFillDatalist();
+  var def=(document.getElementById('gfilt-zbv')||{}).value||''; if(def==='__vse__') def='';
+  var old=document.getElementById('zbv-bulk-ovl'); if(old) old.remove();
+  var ovl=document.createElement('div'); ovl.id='zbv-bulk-ovl';
+  ovl.style.cssText='position:fixed;inset:0;z-index:9800;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px;';
+  ovl.innerHTML='<div onclick="event.stopPropagation()" style="background:var(--panel,#1a1a2e);border:1px solid var(--border,#333);border-radius:14px;max-width:420px;width:100%;padding:16px;box-shadow:0 10px 40px rgba(0,0,0,.6);">'
+    +'<div style="font-size:15px;font-weight:800;color:#f59e0b;margin-bottom:4px;">📐 Do ZBV – '+items.length+' fotek</div>'
+    +'<div style="font-size:12px;color:var(--text2,#9aa);margin-bottom:10px;">Napiš popis ZBV (našeptává už založené):</div>'
+    +'<input id="zbv-bulk-input" list="dl-zbv-popis" autocomplete="off" placeholder="Stručný popis ZBV" style="width:100%;box-sizing:border-box;background:var(--panel2,#22223a);border:1px solid var(--border,#333);border-radius:8px;color:var(--text,#fff);padding:11px;font-size:14px;">'
+    +'<div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end;"><button onclick="_zbvBulkClose()" style="background:var(--panel2,#22223a);border:1px solid var(--border,#333);border-radius:8px;color:var(--text,#fff);padding:10px 14px;cursor:pointer;">Zrušit</button><button onclick="_zbvBulkConfirm()" style="background:#f59e0b;border:none;border-radius:8px;color:#1a1a1a;padding:10px 16px;font-weight:800;cursor:pointer;">📐 Zařadit</button></div></div>';
+  ovl.addEventListener('click', function(e){ if(e.target===ovl) _zbvBulkClose(); });
+  document.body.appendChild(ovl);
+  window._zbvBulkItems=items;
+  var bi=document.getElementById('zbv-bulk-input'); if(bi){ bi.value=def; setTimeout(function(){ try{ bi.focus(); }catch(e){} },50); bi.onkeydown=function(e){ if(e.key==='Enter') _zbvBulkConfirm(); else if(e.key==='Escape') _zbvBulkClose(); }; }
+}
+function _zbvBulkClose(){ var o=document.getElementById('zbv-bulk-ovl'); if(o) o.remove(); window._zbvBulkItems=null; }
+function _zbvBulkConfirm(){
+  var items=window._zbvBulkItems||[]; if(!items.length){ _zbvBulkClose(); return; }
+  var inp=document.getElementById('zbv-bulk-input'); var v=inp?(inp.value||'').trim():'';
+  if(!v){ showToast('Napiš popis ZBV',2400); return; }
+  _zbvBulkClose();
+  showSync('📐 Zařazuji 0/'+items.length+'…'); var done=0,fail=0;
+  var proms=items.map(function(it){ return db.ref('standalone_photos/'+it.fbKey).update({zbv:true, zbvPopis:v}).then(function(){ it.zbv=true; it.zbvPopis=v; done++; showSync('📐 Zařazuji '+done+'/'+items.length+'…'); }).catch(function(){ fail++; done++; }); });
+  Promise.all(proms).then(function(){ hideSync(); showToast('📐 Do ZBV „'+v+'“: '+(items.length-fail)+' fotek'+(fail?(' ('+fail+'× chyba)'):''),3600); gallerySelectedKeys={}; renderGallery(); });
+}
 function reportTagSelected(){
   var items=Object.values(gallerySelectedKeys).filter(function(it){ return it && it.fbKey; });
   if(!items.length){ showToast('Vyber fotky z galerie',2200); return; }
@@ -12266,6 +12298,7 @@ function copyDiaryExport(){
     <button onclick="downloadSelectedGalleryPhotosShare()" title="Uložit do Fotek na mobilu">📲 Mobil</button>
     <button onclick="downloadSelectedGalleryPhotosZip()" title="Stáhnout jako ZIP na PC">💻 ZIP</button>
     <button onclick="reportTagSelected()" title="Zařadit vybrané fotky do měsíční zprávy" style="background:#10b981;color:#fff;">📄 Do zprávy</button>
+    <button onclick="zbvTagSelected()" title="Zařadit vybrané fotky do konkrétní ZBV" style="background:#f59e0b;color:#1a1a1a;">📐 Do ZBV</button>
     <button id="gab-share-sub" onclick="shareSelectedWithSub()" title="Sdílet vybrané fotky subdodavateli (uvidí je ve své galerii)" style="background:#10b981;color:#fff;">📷 Pro SUB</button>
     <button id="gab-share-inv" onclick="shareSelectedWithInvestor()" title="Sdílet vybrané fotky TDS / investorovi" style="background:#8b5cf6;color:#fff;">🟣 Pro TDS</button>
     <button onclick="deleteSelectedGalleryPhotos()" title="Smazat vybrané (jen vlastní)" style="background:#e94560;color:#fff;">🗑 Smazat</button>
@@ -12315,7 +12348,7 @@ function copyDiaryExport(){
     <div id="prop-title">Propustek</div>
     <button id="btn-prop-zoom-out" onclick="pdfZoom(-1)" title="Zmenšit" style="display:none;background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer;padding:4px 6px;font-weight:700;">−</button>
     <button id="btn-prop-zoom-in"  onclick="pdfZoom(+1)" title="Zvětšit" style="display:none;background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer;padding:4px 6px;font-weight:700;">+</button>
-    <button onclick="if(currentPropSrc)window.open(currentPropSrc,'_blank')" title="Otevřít v Safari s plnou lupou" style="background:none;border:none;color:var(--text2);font-size:16px;cursor:pointer;padding:4px 6px;">↗</button>
+    <button onclick="openPropPdfExternal()" title="Otevřít v Safari s plnou lupou" style="background:none;border:none;color:var(--text2);font-size:16px;cursor:pointer;padding:4px 6px;">↗</button>
     <button id="btn-prop-fs" onclick="togglePropFs()">⛶</button>
     <button id="btn-prop-close" onclick="closePropPanel()">✕</button>
   </div>
