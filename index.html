@@ -4465,6 +4465,36 @@ function burnInMetadata(dataUrl, km, author, callback) {
   img.src = dataUrl;
 }
 
+// Paměťově úsporné zpracování fotky PŘÍMO ze souboru (File/Blob) → zmenšená JPEG dataURL.
+// Proč: readAsDataURL u fotek z Android foťáku (12–108 Mpx) vytvoří obří base64 řetězec a `new Image`
+// z něj dekóduje plnou bitmapu (stovky MB) → špička paměti → WebView appku zabije (pády ~3/10 na Androidu).
+// createImageBitmap dekóduje efektivněji a `close()` paměť hned uvolní; fallback přes objectURL (bez base64).
+function compressFileToDataUrl(file, callback){
+  var MAX = 1600;
+  function draw(src, w, h){
+    if(w > MAX || h > MAX){ if(w > h){ h = Math.round(h*MAX/w); w = MAX; } else { w = Math.round(w*MAX/h); h = MAX; } }
+    var canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+    try { canvas.getContext('2d').drawImage(src, 0, 0, w, h); } catch(e){ canvas.width=canvas.height=0; callback(null); return; }
+    var out = canvas.toDataURL('image/jpeg', 0.88);
+    canvas.width = canvas.height = 0;
+    callback(out);
+  }
+  function viaObjectUrl(){
+    try {
+      var url = URL.createObjectURL(file); var img = new Image();
+      img.onload = function(){ var w=img.naturalWidth||img.width, h=img.naturalHeight||img.height; draw(img, w, h); try{ URL.revokeObjectURL(url); }catch(e){} img.src=''; };
+      img.onerror = function(){ try{ URL.revokeObjectURL(url); }catch(e){} callback(null); };
+      img.src = url;
+    } catch(e){ callback(null); }
+  }
+  if(window.createImageBitmap){
+    try {
+      createImageBitmap(file).then(function(bmp){ draw(bmp, bmp.width, bmp.height); try{ bmp.close(); }catch(e){} })
+                             .catch(function(){ viaObjectUrl(); });
+    } catch(e){ viaObjectUrl(); }
+  } else { viaObjectUrl(); }
+}
+
 function uploadPhotoToGitHub(dataUrl, filename, callback) {
   // Nahrává na Firebase Storage (soukromé, EU, jen pro přihlášené). Vrací CESTU (ne URL),
   // aby se do DB (veřejné čtení) neukládaly token-odkazy. Zobrazení překládá resolveFileUrl().
@@ -6816,9 +6846,10 @@ window.addEventListener('load', function() {
     var km = null;
     try { km = fmtKm(gpxCumToRealKm(nearestOnRoute(latlng.lat, latlng.lng).cum)); } catch(ex){}
     var author = (window.currentUser && window.currentUser.name) || localStorage.getItem('noteAuthor') || '';
-    var reader = new FileReader();
-    reader.onload = function(ev) {
-      compressImage(ev.target.result, function(compressed) {
+    // Paměťově úsporné zpracování přímo ze souboru (ne readAsDataURL) → méně pádů na Androidu u velkých fotek.
+    compressFileToDataUrl(file, function(compressed) {
+      if(!compressed){ showToast('❌ Fotku se nepodařilo zpracovat – zkus to znovu nebo nižší rozlišení foťáku', 3800); return; }
+      {
         // Vždy uložit obě verze (originál + s razítkem). V galerii zobrazit s razítkem.
         // Dotaz "razítkovat?" se přeskakuje - volba se dělá až při stahování.
         window.photoSession.pendingPhoto = compressed;
@@ -6829,9 +6860,8 @@ window.addEventListener('load', function() {
           window.photoSession.pendingMeta.so = so || '';
           ppAnswer(true);  // true = v galerii bude razítkovaná verze
         });
-      });
-    };
-    reader.readAsDataURL(file);
+      }
+    });
   });
 });
 
